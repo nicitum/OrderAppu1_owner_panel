@@ -1,0 +1,280 @@
+/* OrderManagement.css */
+
+.order-management-container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 2rem auto;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Header Section */
+.order-management-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.order-management-header h1 {
+  font-size: 1.8rem;
+  color: #2c3e50;
+  margin: 0;
+  font-weight: 600;
+}
+
+.filter-controls {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.filter-group label {
+  font-weight: 500;
+  color: #4a5568;
+  font-size: 0.9rem;
+}
+
+.filter-group input[type="date"] {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.filter-group input[type="date"]:focus {
+  border-color: #4299e1;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+/* Main Table */
+.orders-table-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.orders-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.orders-table th {
+  background-color: #f7fafc;
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #4a5568;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.orders-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #edf2f7;
+  color: #4a5568;
+  vertical-align: middle;
+}
+
+.order-row:hover {
+  background-color: #f8fafc;
+  cursor: pointer;
+}
+
+/* Status Badge */
+.status-badge {
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-weight: 500;
+  font-size: 0.8rem;
+  display: inline-block;
+  text-transform: capitalize;
+}
+
+/* Empty State */
+.no-orders {
+  text-align: center;
+  padding: 2rem;
+  color: #718096;
+  font-style: italic;
+}
+
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  padding: 2rem;
+  color: #718096;
+}
+
+/* Product Details Section */
+.product-details-row {
+  background-color: #f8fafc;
+}
+
+.product-details-row td {
+  padding: 0 !important;
+}
+
+.products-container {
+  padding: 1.5rem;
+  margin: 0.5rem;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.products-container h4 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.products-table-detail {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.products-table-detail th {
+  background-color: #f7fafc;
+  padding: 0.75rem;
+  font-weight: 600;
+  color: #4a5568;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+}
+
+.products-table-detail td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #edf2f7;
+  color: #4a5568;
+  vertical-align: middle;
+}
+
+/* Column Alignment */
+.quantity-col,
+.gst-rate-col {
+  text-align: center !important;
+  width: 80px;
+}
+
+.price-col,
+.total-col {
+  text-align: right !important;
+  width: 120px;
+}
+
+.actions-col {
+  width: 100px;
+  text-align: center !important;
+}
+
+/* Button Styles */
+.edit-button,
+.save-button {
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.edit-button {
+  border: 1px solid #4299e1;
+  color: #4299e1;
+  background-color: white;
+}
+
+.edit-button:hover {
+  background-color: #ebf8ff;
+}
+
+.save-button {
+  border: 1px solid #48bb78;
+  color: white;
+  background-color: #48bb78;
+}
+
+.save-button:hover {
+  background-color: #38a169;
+}
+
+/* Price Input */
+.edit-price-input {
+  width: 80px;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  text-align: right;
+  transition: all 0.2s ease;
+}
+
+.edit-price-input:focus {
+  border-color: #4299e1;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+/* Loading States */
+.loading-products,
+.no-products {
+  padding: 1rem;
+  text-align: center;
+  color: #718096;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .order-management-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .filter-controls {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+  
+  .orders-table th,
+  .orders-table td {
+    padding: 0.75rem 0.5rem;
+  }
+  
+  .products-table-detail th,
+  .products-table-detail td {
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .edit-price-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .price-breakdown {
+    font-size: 0.8rem;
+    color: #666;
+  }
+}
