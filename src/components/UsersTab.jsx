@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import {
   getUsers,
-  toggleUserBlock,
+  updateUserBlockStatus,
+  getUserBlockStatus,
   updateUser,
   addUser,
   getAssignedUsers,
@@ -16,13 +17,16 @@ import axios from "axios";
 import * as XLSX from 'xlsx';
 import { Plus } from 'lucide-react';
 
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
+];
+
 export default function UsersTab() {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showAddSalesManagerModal, setShowAddSalesManagerModal] = useState(false);
   const [isCheckingLimits, setIsCheckingLimits] = useState(false);
   const [clientPrefixes, setClientPrefixes] = useState({
     customer_prefix: "",
@@ -36,6 +40,7 @@ export default function UsersTab() {
   const [routes, setRoutes] = useState([]);
   const [showAddRouteModal, setShowAddRouteModal] = useState(false);
   const [newRouteName, setNewRouteName] = useState('');
+  const [userStatuses, setUserStatuses] = useState({});
 
   // Form states for both edit and add
   const initialFormState = {
@@ -44,6 +49,8 @@ export default function UsersTab() {
     phone: "",
     password: "",
     name: "",
+    email: "",
+    alias: "",
     route: "",
     delivery_address: "",
     gst_number: "",
@@ -113,48 +120,94 @@ export default function UsersTab() {
     }
   };
 
-  // Fetch users with debounce
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      fetchUsers(searchTerm);
-    }, 300);
+  // Fetch and store all user statuses
+  const fetchAllUserStatuses = async (usersList) => {
+    const statuses = {};
+    await Promise.all(
+      usersList.map(async (user) => {
+        try {
+          const res = await getUserBlockStatus(user.customer_id);
+          statuses[user.customer_id] = res.data.status;
+        } catch (e) {
+          statuses[user.customer_id] = 'active'; // fallback
+        }
+      })
+    );
+    setUserStatuses(statuses);
+  };
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm]);
-
-  const fetchUsers = async (search) => {
+  // Fetch users and their statuses
+  const fetchUsersAndStatuses = async (search) => {
     setIsLoading(true);
     try {
+      let data = [];
       if (loggedInUser?.role === "superadmin") {
-        const data = await getUsers(search);
-        setUsers(data);
+        data = await getUsers(search);
+        // ... filter logic ...
+        const filteredData = data.filter(user => {
+          const isAllowedRole = user.role === 'superadmin' || user.role === 'user';
+          const matchesSearch = !search || 
+            user.name?.toLowerCase().includes(search.toLowerCase()) ||
+            user.phone?.includes(search) ||
+            user.route?.toLowerCase().includes(search.toLowerCase());
+          return isAllowedRole && matchesSearch;
+        });
+        setUsers(filteredData);
+        await fetchAllUserStatuses(filteredData);
       } else if (loggedInUser?.role === "admin") {
         const result = await getAssignedUsers(loggedInUser.id1);
         if (result.success) {
-          setUsers(result.assignedUsers);
+          const filteredUsers = result.assignedUsers.filter(user => {
+            const isAllowedRole = user.role === 'superadmin' || user.role === 'user';
+            const matchesSearch = !search || 
+              user.name?.toLowerCase().includes(search.toLowerCase()) ||
+              user.phone?.includes(search) ||
+              user.route?.toLowerCase().includes(search.toLowerCase());
+            return isAllowedRole && matchesSearch;
+          });
+          setUsers(filteredUsers);
+          await fetchAllUserStatuses(filteredUsers);
         } else {
           setUsers([]);
+          setUserStatuses({});
           toast.error(result.message || "Failed to fetch assigned users");
         }
       }
     } catch (error) {
+      setUsers([]);
+      setUserStatuses({});
       toast.error("Failed to fetch users");
-      console.error("Error fetching users:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleToggleBlock = async (userId, currentStatus) => {
+  // Debounced search
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchUsersAndStatuses(searchTerm);
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchUsersAndStatuses("");
+  }, []);
+
+  const handleToggleBlock = async (customer_id, currentStatus) => {
     try {
-      const newStatus = currentStatus === "Block" ? "Active" : "Block";
-      await toggleUserBlock(userId, newStatus);
-      fetchUsers(searchTerm);
-      toast.success(
-        `User ${newStatus === "Block" ? "blocked" : "activated"} successfully`
-      );
+      // Only use 'active' and 'blocked' (lowercase)
+      const newStatus = currentStatus === "active" ? "blocked" : "active";
+      const response = await updateUserBlockStatus(customer_id, newStatus);
+      if (response.status) {
+        toast.success(response.message || `User status updated to ${newStatus}`);
+        await fetchUsersAndStatuses(searchTerm);
+      } else {
+        throw new Error(response.message || "Failed to update user status");
+      }
     } catch (error) {
-      toast.error("Failed to update user status");
+      toast.error(error.message || "Failed to update user status");
     }
   };
 
@@ -166,6 +219,8 @@ export default function UsersTab() {
       phone: user.phone || "",
       password: "",
       name: user.name || "",
+      email: user.email || "",
+      alias: user.alias || "",
       route: user.route || "",
       delivery_address: user.delivery_address || "",
       gst_number: user.gst_number || "",
@@ -187,7 +242,7 @@ export default function UsersTab() {
     
     try {
       await updateUser(selectedUser.customer_id, editForm);
-      fetchUsers(searchTerm);
+      fetchUsersAndStatuses(searchTerm);
       setSelectedUser(null);
       toast.success("User updated successfully");
     } catch (error) {
@@ -205,6 +260,10 @@ export default function UsersTab() {
     if (!formData.state) errors.state = "State is required";
     if (!formData.zip_code) errors.zip_code = "Zip code is required";
     if (!formData.username) errors.username = "Username is required";
+    if (!formData.email) errors.email = "Email is required";
+    if (formData.email && !/\S+@\S+\.\S+/.test(formData.email)) {
+      errors.email = "Please enter a valid email address";
+    }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -245,20 +304,6 @@ export default function UsersTab() {
     }
   };
 
-  const handleAddSalesManagerClick = async () => {
-    const canAddUser = await checkUserLimits();
-    if (canAddUser) {
-      // Generate customer_id with prefix when opening the modal
-      const newCustomerId = await generateCustomerId(clientPrefixes.sm_prefix);
-      setNewUser(prev => ({
-        ...prev,
-        customer_id: newCustomerId,
-        role: 'admin' // Set role as admin by default
-      }));
-      setShowAddSalesManagerModal(true);
-    }
-  };
-
   const handleAddUserClick = async () => {
     const canAddUser = await checkUserLimits();
     if (canAddUser) {
@@ -266,7 +311,8 @@ export default function UsersTab() {
       const newCustomerId = await generateCustomerId(clientPrefixes.customer_prefix);
       setNewUser(prev => ({
         ...prev,
-        customer_id: newCustomerId
+        customer_id: newCustomerId,
+        role: 'user' // Ensure role is set to user
       }));
       setShowAddModal(true);
     }
@@ -279,6 +325,13 @@ export default function UsersTab() {
     
     try {
       setIsLoading(true);
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(newUser.email)) {
+        toast.error("Please enter a valid email address");
+        return;
+      }
 
       // First check role counts from both APIs
       const [roleCountsResponse, clientStatusResponse] = await Promise.all([
@@ -320,18 +373,28 @@ export default function UsersTab() {
       const userData = {
         ...newUser,
         phone: String(newUser.phone).trim(),
-        password: newUser.username
+        password: newUser.username,
+        email: newUser.email.trim(), // Ensure email is included and trimmed
+        role: newUser.role || 'user' // Ensure role is set
       };
       
-      await addUser(userData);
-      await fetchUsers(searchTerm);
-      setShowAddModal(false);
-      setShowAddSalesManagerModal(false);
-      resetNewUserForm();
-      toast.success("User added successfully");
+      console.log('Sending user data to backend:', userData); // Log the data being sent
+      
+      const response = await addUser(userData);
+      console.log('Backend response:', response); // Log the backend response
+      
+      // Check if the response indicates success
+      if (response.status === true) {
+        await fetchUsersAndStatuses(searchTerm);
+        setShowAddModal(false);
+        resetNewUserForm();
+        toast.success(response.message || "User added successfully");
+      } else {
+        throw new Error(response.message || 'Failed to add user');
+      }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to add user");
       console.error("Add user error:", error);
+      toast.error(error.message || "Failed to add user");
     } finally {
       setIsLoading(false);
     }
@@ -463,7 +526,7 @@ export default function UsersTab() {
           }
 
           // Refresh the user list
-          await fetchUsers(searchTerm);
+          await fetchUsersAndStatuses(searchTerm);
           
           // Show results
           if (successCount > 0) {
@@ -582,18 +645,11 @@ export default function UsersTab() {
               Bulk Upload
             </button>
             <button
-              onClick={handleAddSalesManagerClick}
-              className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors shadow-sm"
-              disabled={isLoading || isCheckingLimits}
-            >
-              {isLoading || isCheckingLimits ? "Loading..." : "Add Sales Manager"}
-            </button>
-            <button
               onClick={handleAddUserClick}
               className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors shadow-sm"
               disabled={isLoading || isCheckingLimits}
             >
-              {isLoading || isCheckingLimits ? "Loading..." : "Add New User"}
+              {isLoading || isCheckingLimits ? "Loading..." : "Add Customer"}
             </button>
           </div>
         )}
@@ -602,6 +658,7 @@ export default function UsersTab() {
       <UserTable
         users={users}
         isLoading={isLoading}
+        userStatuses={userStatuses}
         onToggleBlock={handleToggleBlock}
         onEditUser={loggedInUser?.role === "superadmin" ? handleEditUser : null}
       />
@@ -625,7 +682,7 @@ export default function UsersTab() {
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6 sticky top-0 bg-white z-10 py-2">
-              <h3 className="text-xl font-semibold text-gray-900">Add New User</h3>
+              <h3 className="text-xl font-semibold text-gray-900">Add New Customer</h3>
               <button 
                 onClick={() => {
                   setShowAddModal(false);
@@ -636,13 +693,11 @@ export default function UsersTab() {
                 &times;
               </button>
             </div>
-            
             <form onSubmit={handleAddUser} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6">
+                {/* Business Name (username) */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Username *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Business Name *</label>
                   <input
                     type="text"
                     name="username"
@@ -655,11 +710,23 @@ export default function UsersTab() {
                     <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>
                   )}
                 </div>
-                
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Alias */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Customer ID *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Alias</label>
+                  <input
+                    type="text"
+                    name="alias"
+                    value={newUser.alias}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="Optional alias name"
+                  />
+                </div>
+                {/* Customer Code (customer_id) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer Code *</label>
                   <input
                     type="text"
                     name="customer_id"
@@ -670,11 +737,9 @@ export default function UsersTab() {
                   />
                   <p className="mt-1 text-sm text-gray-500">Auto-generated field</p>
                 </div>
-                
+                {/* Customer Name (name) */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name *</label>
                   <input
                     type="text"
                     name="name"
@@ -687,11 +752,24 @@ export default function UsersTab() {
                     <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
                   )}
                 </div>
-                
+                {/* Email */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone Number *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    value={newUser.email}
+                    onChange={handleInputChange}
+                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.email ? "border-red-500" : ""}`}
+                  />
+                  {formErrors.email && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
+                  )}
+                </div>
+                {/* Mobile Number (phone) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number *</label>
                   <input
                     type="tel"
                     name="phone"
@@ -704,91 +782,9 @@ export default function UsersTab() {
                     <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
                   )}
                 </div>
-                
-                {renderRouteInput(newUser, setNewUser, formErrors)}
-                
+                {/* City */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    GST Number
-                  </label>
-                  <input
-                    type="text"
-                    name="gst_number"
-                    value={newUser.gst_number}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Delivery Address
-                  </label>
-                  <textarea
-                    name="delivery_address"
-                    value={newUser.delivery_address}
-                    onChange={handleInputChange}
-                    rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 1
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line1"
-                    value={newUser.address_line1}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 2
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line2"
-                    value={newUser.address_line2}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 3
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line3"
-                    value={newUser.address_line3}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 4
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line4"
-                    value={newUser.address_line4}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
                   <input
                     type="text"
                     name="city"
@@ -801,28 +797,72 @@ export default function UsersTab() {
                     <p className="mt-1 text-sm text-red-600">{formErrors.city}</p>
                   )}
                 </div>
-                
+                {/* Address Line 1 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
                   <input
                     type="text"
+                    name="address_line1"
+                    value={newUser.address_line1}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                {/* Country (fixed) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                  <input
+                    type="text"
+                    name="country"
+                    value="India"
+                    disabled
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                  />
+                </div>
+                {/* Address Line 2 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
+                  <input
+                    type="text"
+                    name="address_line2"
+                    value={newUser.address_line2}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                {/* State (dropdown) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
+                  <select
                     name="state"
                     required
                     value={newUser.state}
                     onChange={handleInputChange}
                     className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.state ? "border-red-500" : ""}`}
-                  />
+                  >
+                    <option value="">Select a state</option>
+                    {INDIAN_STATES.map((state) => (
+                      <option key={state} value={state}>{state}</option>
+                    ))}
+                  </select>
                   {formErrors.state && (
                     <p className="mt-1 text-sm text-red-600">{formErrors.state}</p>
                   )}
                 </div>
-                
+                {/* Address Line 3 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Zip Code *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 3</label>
+                  <input
+                    type="text"
+                    name="address_line3"
+                    value={newUser.address_line3}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                {/* Pin Code (zip_code) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pin Code *</label>
                   <input
                     type="text"
                     name="zip_code"
@@ -835,8 +875,40 @@ export default function UsersTab() {
                     <p className="mt-1 text-sm text-red-600">{formErrors.zip_code}</p>
                   )}
                 </div>
+                {/* Address Line 4 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 4</label>
+                  <input
+                    type="text"
+                    name="address_line4"
+                    value={newUser.address_line4}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                {/* GST Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
+                  <input
+                    type="text"
+                    name="gst_number"
+                    value={newUser.gst_number}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                {/* Delivery Address (full width, more space) */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
+                  <textarea
+                    name="delivery_address"
+                    value={newUser.delivery_address}
+                    onChange={handleInputChange}
+                    rows={3}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
               </div>
-              
               <div className="flex justify-end space-x-3 pt-6">
                 <button
                   type="button"
@@ -854,264 +926,7 @@ export default function UsersTab() {
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Adding..." : "Add User"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Sales Manager Modal */}
-      {showAddSalesManagerModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 sticky top-0 bg-white z-10 py-2">
-              <h3 className="text-xl font-semibold text-gray-900">Add New Sales Manager</h3>
-              <button 
-                onClick={() => {
-                  setShowAddSalesManagerModal(false);
-                  resetNewUserForm();
-                }}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                &times;
-              </button>
-            </div>
-            
-            <form onSubmit={handleAddUser} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Username *
-                  </label>
-                  <input
-                    type="text"
-                    name="username"
-                    required
-                    value={newUser.username}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.username ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.username && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Customer ID *
-                  </label>
-                  <input
-                    type="text"
-                    name="customer_id"
-                    required
-                    value={newUser.customer_id}
-                    disabled
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed"
-                  />
-                  <p className="mt-1 text-sm text-gray-500">Auto-generated field</p>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    required
-                    value={newUser.name}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.name ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.name && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone Number *
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    required
-                    value={newUser.phone}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.phone ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.phone && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Route *
-                  </label>
-                  <input
-                    type="text"
-                    name="route"
-                    required
-                    value={newUser.route}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.route ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.route && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.route}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    GST Number
-                  </label>
-                  <input
-                    type="text"
-                    name="gst_number"
-                    value={newUser.gst_number}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Delivery Address
-                  </label>
-                  <textarea
-                    name="delivery_address"
-                    value={newUser.delivery_address}
-                    onChange={handleInputChange}
-                    rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 1
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line1"
-                    value={newUser.address_line1}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 2
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line2"
-                    value={newUser.address_line2}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 3
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line3"
-                    value={newUser.address_line3}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 4
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line4"
-                    value={newUser.address_line4}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    name="city"
-                    required
-                    value={newUser.city}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.city ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.city && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.city}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State *
-                  </label>
-                  <input
-                    type="text"
-                    name="state"
-                    required
-                    value={newUser.state}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.state ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.state && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.state}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Zip Code *
-                  </label>
-                  <input
-                    type="text"
-                    name="zip_code"
-                    required
-                    value={newUser.zip_code}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.zip_code ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.zip_code && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.zip_code}</p>
-                  )}
-                </div>
-              </div>
-              
-              <div className="flex justify-end space-x-3 pt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddSalesManagerModal(false);
-                    resetNewUserForm();
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  disabled={isLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Adding..." : "Add Sales Manager"}
+                  {isLoading ? "Adding..." : "Add Customer"}
                 </button>
               </div>
             </form>

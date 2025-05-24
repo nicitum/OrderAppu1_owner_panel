@@ -9,10 +9,11 @@ import Home from './Home';
 import UsersTab from './UsersTab';
 import ProductsTab from './ProductsTab';
 import RouteMaster from './RouteMaster';
-
+import SalesmanMaster from './SalesmanMaster';
 import BrandsMaster from './BrandsMaster';
 import CategoriesMaster from './CategoriesMaster';
 import UnitsMaster from './UnitsMaster';
+import StockGroupsMaster from './StockGroupsMaster';
 
 export default function Dashboard() {
   const [loggedInUser, setLoggedInUser] = useState(null);
@@ -53,6 +54,8 @@ export default function Dashboard() {
           <Route path="/categories" element={<CategoriesMaster />} />
           <Route path="/units" element={<UnitsMaster />} />
           <Route path="/routes" element={<RouteMaster />} />
+          <Route path="/stockgroups" element={<StockGroupsMaster />} />
+          <Route path="/salesmen" element={<SalesmanMaster />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

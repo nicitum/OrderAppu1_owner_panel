@@ -14,7 +14,9 @@ import {
   getUOMs,
   createBrand,
   createCategory,
-  createUOM
+  createUOM,
+  getStockGroups,
+  createStockGroup
 } from "../services/api";
 import { Plus, Edit, Package, Image as ImageIcon, Upload } from "lucide-react";
 import toast from "react-hot-toast";
@@ -48,43 +50,45 @@ export default function ProductsTab() {
   const [newBrand, setNewBrand] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [newUOM, setNewUOM] = useState("");
+  const [stockGroups, setStockGroups] = useState([]);
+  const [showStockGroupModal, setShowStockGroupModal] = useState(false);
+  const [newStockGroup, setNewStockGroup] = useState("");
 
   const [newProduct, setNewProduct] = useState({
     product_code: "",
     name: "",
-    brand: "",
-    category: "",
-    mrp: "",
-    selling_price: "",
-    hsn_code: "",
-    gst_rate: "",
     alias: "",
     part_number: "",
+    brand: "",
     stock_group: "",
+    category: "",
     unit_of_measure: "",
+    cost_price: "",
+    selling_price: "",
+    mrp: "",
+    hsn_code: "",
+    gst_rate: "",
     type_of_supply: "",
-    maintain_batches: "",
-    stock_quantity: 0
+    stock_quantity: ""
   });
   
   const [currentProduct, setCurrentProduct] = useState({
     id: "",
     product_code: "",
     name: "",
-    brand: "",
-    category: "",
-    mrp: "",
-    selling_price: "",
-    hsn_code: "",
-    gst_rate: "",
-    image: "",
     alias: "",
     part_number: "",
+    brand: "",
     stock_group: "",
+    category: "",
     unit_of_measure: "",
+    cost_price: "",
+    selling_price: "",
+    mrp: "",
+    hsn_code: "",
+    gst_rate: "",
     type_of_supply: "",
-    maintain_batches: "",
-    stock_quantity: 0
+    stock_quantity: ""
   });
   
   const [imageFiles, setImageFiles] = useState({});
@@ -210,12 +214,15 @@ export default function ProductsTab() {
 
   const validateForm = (productData) => {
     const errors = {};
-    if (!productData.product_code) errors.product_code = "Product Code is required";
     if (!productData.name) errors.name = "Name is required";
-    if (!productData.stock_group) errors.stock_group = "Stock Group is required";
-    if (!productData.unit_of_measure) errors.unit_of_measure = "Unit of Measure is required";
-    if (!productData.gst_rate) errors.gst_rate = "GST Rate is required";
+    if (!productData.selling_price) errors.selling_price = "Selling Price is required";
+    if (!productData.mrp) errors.mrp = "MRP is required";
+    if (!productData.gst_rate || !/^[1-9][0-9]*$/.test(productData.gst_rate)) errors.gst_rate = "GST % must be a positive integer (min 1)";
     if (!productData.type_of_supply) errors.type_of_supply = "Type of Supply is required";
+    if (!productData.brand) errors.brand = "Brand is required";
+    if (!productData.stock_group) errors.stock_group = "Stock Group is required";
+    if (!productData.category) errors.category = "Category is required";
+    if (!productData.unit_of_measure) errors.unit_of_measure = "Unit of Measure is required";
     setErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -227,7 +234,7 @@ export default function ProductsTab() {
       return;
     }
     try {
-      const productCode = await generateProductCode();
+      const productCode = newProduct.product_code; // Use the generated code from state
       const currentDate = new Date().toISOString();
 
       await addProduct({
@@ -237,6 +244,7 @@ export default function ProductsTab() {
         category: newProduct.category,
         price: newProduct.mrp ? parseFloat(newProduct.mrp) : null,
         discountPrice: newProduct.selling_price ? parseFloat(newProduct.selling_price) : null,
+        cost_price: newProduct.cost_price ? parseFloat(newProduct.cost_price) : null,
         created_at: currentDate,
         updated_at: currentDate,
         hsn_code: newProduct.hsn_code,
@@ -246,28 +254,27 @@ export default function ProductsTab() {
         stock_group: newProduct.stock_group,
         uom: newProduct.unit_of_measure,
         type_of_supply: newProduct.type_of_supply,
-        maintain_batches: newProduct.maintain_batches === "Yes",
-        stock_quantity: newProduct.stock_quantity ? parseInt(newProduct.stock_quantity) : 0
+        stock_quantity: newProduct.stock_quantity ? parseInt(newProduct.stock_quantity) : 0,
       });
 
       await fetchProducts();
-      setShowAddModal(false);
+      setShowAddModal(false); // Always close modal after add
       setNewProduct({
         product_code: "",
         name: "",
-        brand: "",
-        category: "",
-        mrp: "",
-        selling_price: "",
-        hsn_code: "",
-        gst_rate: "",
         alias: "",
         part_number: "",
+        brand: "",
         stock_group: "",
+        category: "",
         unit_of_measure: "",
+        cost_price: "",
+        selling_price: "",
+        mrp: "",
+        hsn_code: "",
+        gst_rate: "",
         type_of_supply: "",
-        maintain_batches: "",
-        stock_quantity: 0
+        stock_quantity: ""
       });
       setErrors({});
       toast.success("Product added successfully");
@@ -291,6 +298,7 @@ export default function ProductsTab() {
         category: currentProduct.category,
         price: currentProduct.mrp ? parseFloat(currentProduct.mrp) : null,
         discountPrice: currentProduct.selling_price ? parseFloat(currentProduct.selling_price) : null,
+        cost_price: currentProduct.cost_price ? parseFloat(currentProduct.cost_price) : 0,
         updated_at: currentDate,
         hsn_code: currentProduct.hsn_code,
         gst_rate: currentProduct.gst_rate ? parseFloat(currentProduct.gst_rate) : null,
@@ -299,10 +307,9 @@ export default function ProductsTab() {
         stock_group: currentProduct.stock_group,
         uom: currentProduct.unit_of_measure,
         type_of_supply: currentProduct.type_of_supply,
-        maintain_batches: currentProduct.maintain_batches === "Yes",
         stock_quantity: currentProduct.stock_quantity ? parseInt(currentProduct.stock_quantity) : 0
       };
-
+      console.log('Update payload:', updateData);
       // Debug logging
       console.log('Current Product State:', currentProduct);
       console.log('Update Data being sent:', updateData);
@@ -548,6 +555,7 @@ export default function ProductsTab() {
   // Add new useEffect to fetch brands, categories, and units
   useEffect(() => {
     fetchMasterData();
+    fetchStockGroups();
   }, []);
 
   const fetchMasterData = async () => {
@@ -592,6 +600,19 @@ export default function ProductsTab() {
     } catch (error) {
       console.error("Error fetching master data:", error);
       toast.error("Failed to fetch master data");
+    }
+  };
+
+  // Fetch stock groups
+  const fetchStockGroups = async () => {
+    try {
+      const response = await getStockGroups();
+      if (response && response.data) {
+        setStockGroups(response.data);
+      }
+    } catch (error) {
+      console.error("Error fetching stock groups:", error);
+      toast.error("Failed to fetch stock groups");
     }
   };
 
@@ -641,6 +662,25 @@ export default function ProductsTab() {
     }
   };
 
+  const handleCreateStockGroup = async (e) => {
+    e.preventDefault();
+    try {
+      await createStockGroup(newStockGroup);
+      await fetchStockGroups();
+      setShowStockGroupModal(false);
+      setNewStockGroup("");
+      toast.success("Stock group created successfully");
+    } catch (error) {
+      toast.error("Failed to create stock group");
+    }
+  };
+
+  // When opening Add Product modal, always fetch and set the next product code
+  const handleOpenAddModal = async () => {
+    await fetchProductPrefix();
+    setShowAddModal(true);
+  };
+
   return (
     <div className="p-8 bg-gray-100 min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -657,7 +697,7 @@ export default function ProductsTab() {
               Bulk Upload
             </button>
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={handleOpenAddModal}
               className="flex items-center px-4 py-2 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"
             >
               <Plus className="h-5 w-5 mr-2" />
@@ -874,9 +914,7 @@ export default function ProductsTab() {
                   <input
                     type="text"
                     value={newProduct.name}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, name: e.target.value })
-                    }
+                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
                     placeholder="Enter product name"
                     className={`block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors ${errors.name ? 'border-red-500' : ''}`}
                     required
@@ -885,255 +923,122 @@ export default function ProductsTab() {
                     <p className="mt-1 text-sm text-red-600">{errors.name}</p>
                   )}
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Alias
-                    </label>
-                    <input
-                      type="text"
-                      value={newProduct.alias}
-                      onChange={(e) =>
-                        setNewProduct({ ...newProduct, alias: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Alias</label>
+                    <input type="text" value={newProduct.alias} onChange={(e) => setNewProduct({ ...newProduct, alias: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Part Number
-                    </label>
-                    <input
-                      type="text"
-                      value={newProduct.part_number}
-                      onChange={(e) =>
-                        setNewProduct({ ...newProduct, part_number: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Part Number</label>
+                    <input type="text" value={newProduct.part_number} onChange={(e) => setNewProduct({ ...newProduct, part_number: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Product Code *
-                    </label>
-                    <input
-                      type="text"
-                      value={newProduct.product_code}
-                      disabled
-                      className="block w-full rounded-lg border-gray-300 shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed"
-                      required
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Product Code</label>
+                    <input type="text" value={newProduct.product_code} disabled className="block w-full rounded-lg border-gray-300 shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed" required />
                     <p className="mt-1 text-sm text-gray-500">Auto-generated field</p>
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Brand
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Brand *</label>
                     <div className="flex space-x-2">
-                      <select
-                        value={newProduct.brand}
-                        onChange={(e) =>
-                          setNewProduct({ ...newProduct, brand: e.target.value })
-                        }
-                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                      >
+                      <select value={newProduct.brand} onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required>
                         <option value="">Select Brand</option>
                         {Array.isArray(brands) && brands.length > 0 ? (
-                          brands.map((brand) => (
-                            <option key={brand.id} value={brand.name}>
-                              {brand.name}
-                            </option>
-                          ))
+                          brands.map((brand) => <option key={brand.id} value={brand.name}>{brand.name}</option>)
                         ) : (
                           <option value="" disabled>No brands available</option>
                         )}
                       </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowBrandModal(true)}
-                        className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"
-                      >
-                        <Plus className="h-5 w-5" />
-                      </button>
+                      <button type="button" onClick={() => setShowBrandModal(true)} className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"><Plus className="h-5 w-5" /></button>
                     </div>
+                    {errors.brand && (<p className="mt-1 text-sm text-red-600">{errors.brand}</p>)}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Category
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Stock Group *</label>
                     <div className="flex space-x-2">
-                      <select
-                        value={newProduct.category}
-                        onChange={(e) =>
-                          setNewProduct({ ...newProduct, category: e.target.value })
-                        }
-                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                      >
-                        <option value="">Select Category</option>
-                        {Array.isArray(categories) && categories.map((category) => (
-                          <option key={category.id} value={category.name}>
-                            {category.name}
-                          </option>
-                        ))}
+                      <select value={newProduct.stock_group} onChange={(e) => setNewProduct({ ...newProduct, stock_group: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required>
+                        <option value="">Select Stock Group</option>
+                        {Array.isArray(stockGroups) && stockGroups.length > 0 ? (
+                          stockGroups.map((sg) => <option key={sg.id} value={sg.name}>{sg.name}</option>)
+                        ) : (
+                          <option value="" disabled>No stock groups available</option>
+                        )}
                       </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowCategoryModal(true)}
-                        className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"
-                      >
-                        <Plus className="h-5 w-5" />
-                      </button>
+                      <button type="button" onClick={() => setShowStockGroupModal(true)} className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"><Plus className="h-5 w-5" /></button>
                     </div>
+                    {errors.stock_group && (<p className="mt-1 text-sm text-red-600">{errors.stock_group}</p>)}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      MRP *
-                    </label>
-                    <input
-                      type="number"
-                      value={newProduct.mrp}
-                      onChange={(e) =>
-                        setNewProduct({ ...newProduct, mrp: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Selling Price *
-                    </label>
-                    <input
-                      type="number"
-                      value={newProduct.selling_price}
-                      onChange={(e) =>
-                        setNewProduct({ ...newProduct, selling_price: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      HSN Code
-                    </label>
-                    <input
-                      type="text"
-                      value={newProduct.hsn_code}
-                      onChange={(e) =>
-                        setNewProduct({ ...newProduct, hsn_code: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      GST Rate *
-                    </label>
-                    <input
-                      type="number"
-                      value={newProduct.gst_rate}
-                      onChange={(e) =>
-                        setNewProduct({ ...newProduct, gst_rate: e.target.value })
-                      }
-                      className={`block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors ${errors.gst_rate ? 'border-red-500' : ''}`}
-                      required
-                    />
-                    {errors.gst_rate && (
-                      <p className="mt-1 text-sm text-red-600">{errors.gst_rate}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Stock Group *
-                    </label>
-                    <input
-                      type="text"
-                      value={newProduct.stock_group}
-                      onChange={(e) =>
-                        setNewProduct({ ...newProduct, stock_group: e.target.value })
-                      }
-                      className={`block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors ${errors.stock_group ? 'border-red-500' : ''}`}
-                      required
-                    />
-                    {errors.stock_group && (
-                      <p className="mt-1 text-sm text-red-600">{errors.stock_group}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Unit of Measure *
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
                     <div className="flex space-x-2">
-                      <select
-                        value={newProduct.unit_of_measure}
-                        onChange={(e) =>
-                          setNewProduct({ ...newProduct, unit_of_measure: e.target.value })
-                        }
-                        className={`block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors ${errors.unit_of_measure ? 'border-red-500' : ''}`}
-                        required
-                      >
+                      <select value={newProduct.category} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required>
+                        <option value="">Select Category</option>
+                        {Array.isArray(categories) && categories.length > 0 ? (
+                          categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)
+                        ) : (
+                          <option value="" disabled>No categories available</option>
+                        )}
+                      </select>
+                      <button type="button" onClick={() => setShowCategoryModal(true)} className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"><Plus className="h-5 w-5" /></button>
+                  </div>
+                    {errors.category && (<p className="mt-1 text-sm text-red-600">{errors.category}</p>)}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Unit of Measure *</label>
+                    <div className="flex space-x-2">
+                      <select value={newProduct.unit_of_measure} onChange={(e) => setNewProduct({ ...newProduct, unit_of_measure: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required>
                         <option value="">Select Unit</option>
                         {Array.isArray(units) && units.length > 0 ? (
-                          units.map((unit) =>
-                            typeof unit === 'string' ? (
-                              <option key={unit} value={unit}>{unit}</option>
-                            ) : (
-                              <option key={unit.id} value={unit.name}>{unit.name}</option>
-                            )
-                          )
+                          units.map((unit) => <option key={unit.id} value={unit.name}>{unit.name}</option>)
                         ) : (
                           <option value="" disabled>No units available</option>
                         )}
                       </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowUOMModal(true)}
-                        className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"
-                      >
-                        <Plus className="h-5 w-5" />
-                      </button>
+                      <button type="button" onClick={() => setShowUOMModal(true)} className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"><Plus className="h-5 w-5" /></button>
                     </div>
-                    {errors.unit_of_measure && (
-                      <p className="mt-1 text-sm text-red-600">{errors.unit_of_measure}</p>
-                    )}
+                    {errors.unit_of_measure && (<p className="mt-1 text-sm text-red-600">{errors.unit_of_measure}</p>)}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Stock Quantity
-                    </label>
-                    <input
-                      type="number"
-                      value={newProduct.stock_quantity}
-                      onChange={(e) =>
-                        setNewProduct({ ...newProduct, stock_quantity: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cost Price</label>
+                    <input type="number" value={newProduct.cost_price} onChange={(e) => setNewProduct({ ...newProduct, cost_price: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" min="0" step="0.01" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Type of Supply *
-                    </label>
-                    <select
-                      value={newProduct.type_of_supply}
-                      onChange={(e) =>
-                        setNewProduct({ ...newProduct, type_of_supply: e.target.value })
-                      }
-                      className={`block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors ${errors.type_of_supply ? 'border-red-500' : ''}`}
-                      required
-                    >
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Selling Price *</label>
+                    <input type="number" value={newProduct.selling_price} onChange={(e) => setNewProduct({ ...newProduct, selling_price: e.target.value })} className={`block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors ${errors.selling_price ? 'border-red-500' : ''}`} required min="0" step="0.01" />
+                    {errors.selling_price && (<p className="mt-1 text-sm text-red-600">{errors.selling_price}</p>)}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">MRP *</label>
+                    <input type="number" value={newProduct.mrp} onChange={(e) => setNewProduct({ ...newProduct, mrp: e.target.value })} className={`block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors ${errors.mrp ? 'border-red-500' : ''}`} required min="0" step="0.01" />
+                    {errors.mrp && (<p className="mt-1 text-sm text-red-600">{errors.mrp}</p>)}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">HSN Code</label>
+                    <input type="text" value={newProduct.hsn_code} onChange={(e) => setNewProduct({ ...newProduct, hsn_code: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">GST % *</label>
+                    <input type="number" value={newProduct.gst_rate} onChange={(e) => setNewProduct({ ...newProduct, gst_rate: e.target.value.replace(/[^\d]/g, '') })} className={`block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors ${errors.gst_rate ? 'border-red-500' : ''}`} required min="1" step="1" />
+                    {errors.gst_rate && (<p className="mt-1 text-sm text-red-600">{errors.gst_rate}</p>)}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Type of Supply *</label>
+                    <select value={newProduct.type_of_supply} onChange={(e) => setNewProduct({ ...newProduct, type_of_supply: e.target.value })} className={`block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors ${errors.type_of_supply ? 'border-red-500' : ''}`} required>
                       <option value="">Select Type of Supply</option>
                       <option value="Goods">Goods</option>
                       <option value="Services">Services</option>
                     </select>
-                    {errors.type_of_supply && (
-                      <p className="mt-1 text-sm text-red-600">{errors.type_of_supply}</p>
-                    )}
+                    {errors.type_of_supply && (<p className="mt-1 text-sm text-red-600">{errors.type_of_supply}</p>)}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Opening Stock</label>
+                    <input
+                      type="number"
+                      value={newProduct.stock_quantity}
+                      onChange={e => setNewProduct({ ...newProduct, stock_quantity: e.target.value })}
+                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
+                      min="0"
+                      step="1"
+                    />
                   </div>
                 </div>
                 <div className="flex justify-end space-x-3 pt-6">
@@ -1168,274 +1073,116 @@ export default function ProductsTab() {
               </h3>
               <form onSubmit={handleEditProduct} className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Name *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
                   <input
                     type="text"
                     value={currentProduct.name}
-                    onChange={(e) =>
-                      setCurrentProduct({ ...currentProduct, name: e.target.value })
-                    }
+                    onChange={e => setCurrentProduct({ ...currentProduct, name: e.target.value })}
                     className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
+                    required
                   />
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Alias
-                    </label>
-                    <input
-                      type="text"
-                      value={currentProduct.alias}
-                      onChange={(e) =>
-                        setCurrentProduct({ ...currentProduct, alias: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Alias</label>
+                    <input type="text" value={currentProduct.alias} onChange={e => setCurrentProduct({ ...currentProduct, alias: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Part Number
-                    </label>
-                    <input
-                      type="text"
-                      value={currentProduct.part_number}
-                      onChange={(e) =>
-                        setCurrentProduct({ ...currentProduct, part_number: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Part Number</label>
+                    <input type="text" value={currentProduct.part_number} onChange={e => setCurrentProduct({ ...currentProduct, part_number: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Product Code
-                    </label>
-                    <input
-                      type="text"
-                      value={currentProduct.product_code}
-                      disabled
-                      className="block w-full rounded-lg border-gray-300 shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Product Code</label>
+                    <input type="text" value={currentProduct.product_code} disabled className="block w-full rounded-lg border-gray-300 shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed" required />
                     <p className="mt-1 text-sm text-gray-500">Auto-generated field</p>
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Brand
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Brand *</label>
                     <div className="flex space-x-2">
-                      <select
-                        value={currentProduct.brand}
-                        onChange={(e) =>
-                          setCurrentProduct({ ...currentProduct, brand: e.target.value })
-                        }
-                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                      >
+                      <select value={currentProduct.brand} onChange={e => setCurrentProduct({ ...currentProduct, brand: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required>
                         <option value="">Select Brand</option>
-                        {Array.isArray(brands) && brands.map((brand) => (
-                          <option key={brand.id} value={brand.name}>
-                            {brand.name}
-                          </option>
-                        ))}
+                        {Array.isArray(brands) && brands.length > 0 ? (
+                          brands.map((brand) => <option key={brand.id} value={brand.name}>{brand.name}</option>)
+                        ) : (
+                          <option value="" disabled>No brands available</option>
+                        )}
                       </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowBrandModal(true)}
-                        className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"
-                      >
-                        <Plus className="h-5 w-5" />
-                      </button>
+                      <button type="button" onClick={() => setShowBrandModal(true)} className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"><Plus className="h-5 w-5" /></button>
                     </div>
                   </div>
-                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Category
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Stock Group *</label>
                     <div className="flex space-x-2">
-                      <select
-                        value={currentProduct.category}
-                        onChange={(e) =>
-                          setCurrentProduct({ ...currentProduct, category: e.target.value })
-                        }
-                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                      >
+                      <select value={currentProduct.stock_group} onChange={e => setCurrentProduct({ ...currentProduct, stock_group: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required>
+                        <option value="">Select Stock Group</option>
+                        {Array.isArray(stockGroups) && stockGroups.length > 0 ? (
+                          stockGroups.map((sg) => <option key={sg.id} value={sg.name}>{sg.name}</option>)
+                        ) : (
+                          <option value="" disabled>No stock groups available</option>
+                        )}
+                      </select>
+                      <button type="button" onClick={() => setShowStockGroupModal(true)} className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"><Plus className="h-5 w-5" /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                    <div className="flex space-x-2">
+                      <select value={currentProduct.category} onChange={e => setCurrentProduct({ ...currentProduct, category: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required>
                         <option value="">Select Category</option>
-                        {Array.isArray(categories) && categories.map((category) => (
-                          <option key={category.id} value={category.name}>
-                            {category.name}
-                          </option>
-                        ))}
+                        {Array.isArray(categories) && categories.length > 0 ? (
+                          categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)
+                        ) : (
+                          <option value="" disabled>No categories available</option>
+                        )}
                       </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowCategoryModal(true)}
-                        className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"
-                      >
-                        <Plus className="h-5 w-5" />
-                      </button>
+                      <button type="button" onClick={() => setShowCategoryModal(true)} className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"><Plus className="h-5 w-5" /></button>
                     </div>
                   </div>
-                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      MRP
-                    </label>
-                    <input
-                      type="number"
-                      value={currentProduct.mrp}
-                      onChange={(e) =>
-                        setCurrentProduct({ ...currentProduct, mrp: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Selling Price
-                    </label>
-                    <input
-                      type="number"
-                      value={currentProduct.selling_price}
-                      onChange={(e) =>
-                        setCurrentProduct({ ...currentProduct, selling_price: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      HSN Code
-                    </label>
-                    <input
-                      type="text"
-                      value={currentProduct.hsn_code}
-                      onChange={(e) =>
-                        setCurrentProduct({ ...currentProduct, hsn_code: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      GST Rate
-                    </label>
-                    <input
-                      type="number"
-                      value={currentProduct.gst_rate}
-                      onChange={(e) =>
-                        setCurrentProduct({ ...currentProduct, gst_rate: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Stock Group
-                    </label>
-                    <input
-                      type="text"
-                      value={currentProduct.stock_group}
-                      onChange={(e) =>
-                        setCurrentProduct({ ...currentProduct, stock_group: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Unit of Measure
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Unit of Measure *</label>
                     <div className="flex space-x-2">
-                      <select
-                        value={currentProduct.unit_of_measure}
-                        onChange={(e) =>
-                          setCurrentProduct({ ...currentProduct, unit_of_measure: e.target.value })
-                        }
-                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                      >
+                      <select value={currentProduct.unit_of_measure} onChange={e => setCurrentProduct({ ...currentProduct, unit_of_measure: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required>
                         <option value="">Select Unit</option>
                         {Array.isArray(units) && units.length > 0 ? (
-                          units.map((unit) =>
-                            typeof unit === 'string' ? (
-                              <option key={unit} value={unit}>{unit}</option>
-                            ) : (
-                              <option key={unit.id} value={unit.name}>{unit.name}</option>
-                            )
-                          )
+                          units.map((unit) => <option key={unit.id} value={unit.name}>{unit.name}</option>)
                         ) : (
                           <option value="" disabled>No units available</option>
                         )}
                       </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowUOMModal(true)}
-                        className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"
-                      >
-                        <Plus className="h-5 w-5" />
-                      </button>
+                      <button type="button" onClick={() => setShowUOMModal(true)} className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"><Plus className="h-5 w-5" /></button>
                     </div>
                   </div>
-                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Maintain Batches
-                    </label>
-                    <select
-                      value={currentProduct.maintain_batches}
-                      onChange={(e) =>
-                        setCurrentProduct({ ...currentProduct, maintain_batches: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    >
-                      <option value="">Select Option</option>
-                      <option value="Yes">Yes</option>
-                      <option value="No">No</option>
-                    </select>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cost Price</label>
+                    <input type="number" value={currentProduct.cost_price} onChange={e => setCurrentProduct({ ...currentProduct, cost_price: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" min="0" step="0.01" />
                   </div>
-                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Stock Quantity
-                    </label>
-                    <input
-                      type="number"
-                      value={currentProduct.stock_quantity}
-                      onChange={(e) =>
-                        setCurrentProduct({ ...currentProduct, stock_quantity: e.target.value })
-                      }
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Selling Price *</label>
+                    <input type="number" value={currentProduct.selling_price} onChange={e => setCurrentProduct({ ...currentProduct, selling_price: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required min="0" step="0.01" />
                   </div>
-                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Type of Supply *
-                    </label>
-                    <select
-                      value={currentProduct.type_of_supply}
-                      onChange={(e) =>
-                        setCurrentProduct({ ...currentProduct, type_of_supply: e.target.value })
-                      }
-                      className={`block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors ${errors.type_of_supply ? 'border-red-500' : ''}`}
-                      required
-                    >
+                    <label className="block text-sm font-medium text-gray-700 mb-2">MRP *</label>
+                    <input type="number" value={currentProduct.mrp} onChange={e => setCurrentProduct({ ...currentProduct, mrp: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required min="0" step="0.01" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">HSN Code</label>
+                    <input type="text" value={currentProduct.hsn_code} onChange={e => setCurrentProduct({ ...currentProduct, hsn_code: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">GST % *</label>
+                    <input type="number" value={currentProduct.gst_rate} onChange={e => setCurrentProduct({ ...currentProduct, gst_rate: e.target.value.replace(/[^\d]/g, '') })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required min="1" step="1" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Type of Supply *</label>
+                    <select value={currentProduct.type_of_supply} onChange={e => setCurrentProduct({ ...currentProduct, type_of_supply: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" required>
                       <option value="">Select Type of Supply</option>
                       <option value="Goods">Goods</option>
                       <option value="Services">Services</option>
                     </select>
-                    {errors.type_of_supply && (
-                      <p className="mt-1 text-sm text-red-600">{errors.type_of_supply}</p>
-                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Opening Stock</label>
+                    <input type="number" value={currentProduct.stock_quantity} onChange={e => setCurrentProduct({ ...currentProduct, stock_quantity: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" min="0" step="1" />
                   </div>
                 </div>
                 
@@ -1622,94 +1369,64 @@ export default function ProductsTab() {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
                   <p className="text-gray-900 text-lg font-semibold">{currentProduct.name}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Alias
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Alias</label>
                   <p className="text-gray-900">{currentProduct.alias}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Part Number
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Part Number</label>
                   <p className="text-gray-900">{currentProduct.part_number}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Product Code
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Product Code</label>
                   <p className="text-gray-900">{currentProduct.product_code}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Brand
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Brand</label>
                   <p className="text-gray-900">{currentProduct.brand}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Category
-                  </label>
-                  <p className="text-gray-900">{currentProduct.category}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    MRP
-                  </label>
-                  <p className="text-gray-900">₹{currentProduct.mrp}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Selling Price
-                  </label>
-                  <p className="text-gray-900">₹{currentProduct.selling_price}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    HSN Code
-                  </label>
-                  <p className="text-gray-900">{currentProduct.hsn_code}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    GST Rate
-                  </label>
-                  <p className="text-gray-900">{currentProduct.gst_rate}%</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Stock Group
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Stock Group</label>
                   <p className="text-gray-900">{currentProduct.stock_group}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Unit of Measure
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <p className="text-gray-900">{currentProduct.category}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Unit of Measure</label>
                   <p className="text-gray-900">{currentProduct.unit_of_measure}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Maintain Batches
-                  </label>
-                  <p className="text-gray-900">{currentProduct.maintain_batches}</p>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Cost Price</label>
+                  <p className="text-gray-900">₹{currentProduct.cost_price}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Stock Quantity
-                  </label>
-                  <p className="text-gray-900">{currentProduct.stock_quantity}</p>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Selling Price</label>
+                  <p className="text-gray-900">₹{currentProduct.selling_price}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Type of Supply
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">MRP</label>
+                  <p className="text-gray-900">₹{currentProduct.mrp}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">HSN Code</label>
+                  <p className="text-gray-900">{currentProduct.hsn_code}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">GST %</label>
+                  <p className="text-gray-900">{currentProduct.gst_rate}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Type of Supply</label>
                   <p className="text-gray-900">{currentProduct.type_of_supply}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Opening Stock</label>
+                  <p className="text-gray-900">{currentProduct.stock_quantity}</p>
                 </div>
               </div>
               <div className="flex justify-end mt-6">
@@ -1840,6 +1557,47 @@ export default function ProductsTab() {
                     className="px-4 py-2 text-sm font-medium text-white bg-[#003366] hover:bg-[#002244] rounded-lg transition-colors"
                   >
                     Create Unit
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Create Stock Group Modal */}
+        {showStockGroupModal && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+              <h3 className="text-xl font-semibold text-[#003366] mb-4">Add New Stock Group</h3>
+              <form onSubmit={handleCreateStockGroup} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Stock Group Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newStockGroup}
+                    onChange={(e) => setNewStockGroup(e.target.value)}
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
+                    required
+                  />
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowStockGroupModal(false);
+                      setNewStockGroup("");
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-[#003366] hover:bg-[#002244] rounded-lg transition-colors"
+                  >
+                    Create Stock Group
                   </button>
                 </div>
               </form>

@@ -130,6 +130,19 @@ const Sidebar = () => {
                     Customer Masters
                   </NavLink>
 
+                  <NavLink
+                    to="/dashboard/salesmen"
+                    className={({ isActive }) =>
+                      `flex items-center px-4 py-2 text-sm ${
+                        isActive
+                          ? 'bg-[#005599] text-white font-semibold'
+                          : 'text-gray-100 hover:bg-[#004080]'
+                      }`
+                    }
+                  >
+                    <Tag className="h-4 w-4 mr-3" />
+                    Salesman Masters
+                  </NavLink>
 
                   <NavLink
                     to="/dashboard/routes"
@@ -145,7 +158,6 @@ const Sidebar = () => {
                     Route Masters
                   </NavLink>
 
-                  
                   <NavLink
                     to="/dashboard/products"
                     className={({ isActive }) =>
@@ -198,6 +210,19 @@ const Sidebar = () => {
                   >
                     <Tag className="h-4 w-4 mr-3" />
                     UOM Masters
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard/stockgroups"
+                    className={({ isActive }) =>
+                      `flex items-center px-4 py-2 text-sm ${
+                        isActive
+                          ? 'bg-[#005599] text-white font-semibold'
+                          : 'text-gray-100 hover:bg-[#004080]'
+                      }`
+                    }
+                  >
+                    <Tag className="h-4 w-4 mr-3" />
+                    Stock Groups Masters
                   </NavLink>
                 </div>
               )}
