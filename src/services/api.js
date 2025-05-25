@@ -9,14 +9,18 @@ const api = axios.create({
   }
 });
 
+// Verify baseURL is set correctly
+console.log('API baseURL:', api.defaults.baseURL);
+
+// Add request interceptor to verify URL for image requests
 api.interceptors.request.use((config) => {
+  if (config.url?.includes('/images/')) {
+    console.log('Image request URL:', config.baseURL + config.url);
+  }
+  
   const token = localStorage.getItem("authToken");
-  console.log("Current token:", token); // Debug log
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-    console.log("Request headers:", config.headers); // Debug log
-  } else {
-    console.log("No token found in localStorage"); // Debug log
   }
   return config;
 });
@@ -447,6 +451,50 @@ export const uploadProductImage = async (productId, imageFile) => {
   }
 };
 
+const API_BASE_URL = "http://147.93.110.150:8091";
+
+// Helper function to get salesman image URL
+export const getSalesmanImageUrl = (filename) => {
+  if (!filename) return null;
+  return `${API_BASE_URL}/images/salesman/${filename}`;
+};
+
+// Upload salesman image
+export const uploadSalesmanImage = async (customerId, imageFile) => {
+  try {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+
+    const response = await api.post(
+      `/upload/salesman-image/${customerId}`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('Error uploading salesman image:', error);
+    throw error;
+  }
+};
+
+// Fetch salesman image as blob
+export const fetchSalesmanImage = async (filename) => {
+  try {
+    const response = await api.get(getSalesmanImageUrl(filename), {
+      responseType: 'blob'
+    });
+    return URL.createObjectURL(response.data);
+  } catch (error) {
+    console.error('Error fetching salesman image:', error);
+    return null;
+  }
+};
+
 // Improved function to construct product image URLs
 export const getImageUrl = (imagePath) => {
   if (!imagePath) {
@@ -664,24 +712,39 @@ export const deleteStockGroup = async (id) => {
   return manageStockGroup('delete', { id });
 };
 
-// Get all salesmen
-export const getSalesmen = async (search) => {
+
+// Helper functions for specific salesman operations
+// Get all salesmen or a single salesman
+export const getSalesmen = async (searchTerm = "") => {
   try {
-    const response = await api.get(`/allUsers${search ? `?search=${search}` : ""}`);
-    const allUsers = response.data.data;
-    // Filter only salesmen
-    const salesmen = allUsers.filter(user => user.role === "salesman");
-    return salesmen;
+    const response = await api.get("/salesman-read", {
+      params: searchTerm ? { search: searchTerm } : {},
+    });
+    if (response.data.success) {
+      let salesmen = response.data.data;
+      // If searchTerm, filter client-side (API does not support search param)
+      if (searchTerm) {
+        salesmen = salesmen.filter(salesman =>
+          (salesman.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            salesman.phone?.includes(searchTerm) ||
+            salesman.designation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            salesman.route?.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+      }
+      return salesmen;
+    } else {
+      throw new Error(response.data.message || "Failed to fetch salesmen");
+    }
   } catch (error) {
-    console.error('Error fetching salesmen:', error);
-    throw new Error('Failed to fetch salesmen');
+    console.error("Error fetching salesmen:", error);
+    throw error;
   }
 };
 
-// Add a new salesman
+// Create a new salesman
 export const addSalesman = async (salesmanData) => {
   try {
-    const response = await api.post(`/add-salesman`, salesmanData);
+    const response = await api.post("/salesman-create", salesmanData);
     return response.data;
   } catch (error) {
     throw error;
@@ -689,57 +752,24 @@ export const addSalesman = async (salesmanData) => {
 };
 
 // Update a salesman
-export const updateSalesman = async (customerId, salesmanData) => {
+export const updateSalesman = async (customer_id, updateData) => {
   try {
-    const response = await api.put(`/update-salesman/${customerId}`, salesmanData);
+    console.log('Updating salesman with:', { customer_id, updateData });
+    const requestData = {
+      customer_id,
+      ...updateData
+    };
+    console.log('Request data:', requestData);
+    
+    const response = await api.post("/salesman-update", requestData);
+    console.log('Update response:', response.data);
     return response.data;
   } catch (error) {
-    throw error;
-  }
-};
-
-// Toggle salesman block status
-export const toggleSalesmanBlock = async (salesmanId, status) => {
-  try {
-    const response = await api.post(`/update?customer_id=${salesmanId}`, { status });
-    return response.data.data;
-  } catch (error) {
-    console.error('Error toggling salesman block status:', error);
-    throw new Error('Failed to update salesman status');
-  }
-};
-
-// Get assigned salesmen for an admin
-export const getAssignedSalesmen = async (adminId) => {
-  try {
-    const response = await api.get(`/assigned-users/${adminId}`);
-    if (response.data.success) {
-      // Filter only salesmen
-      const salesmen = response.data.assignedUsers.filter(user => user.role === "salesman");
-      return {
-        success: true,
-        assignedUsers: salesmen
-      };
-    } else {
-      throw new Error(response.data.message || "Failed to fetch assigned salesmen");
-    }
-  } catch (error) {
-    console.error("Error fetching assigned salesmen:", error);
-    throw new Error("Failed to fetch assigned salesmen");
-  }
-};
-
-// Get all salesmen (admin users)
-export const fetchSalesmen = async () => {
-  try {
-    const response = await api.get('/salesman-fetch');
-    if (response.data.status) {
-      return response.data.data;
-    } else {
-      throw new Error(response.data.message || 'Failed to fetch salesmen');
-    }
-  } catch (error) {
-    console.error('Error fetching salesmen:', error);
-    throw error;
+    console.error('Update error details:', {
+      message: error.message,
+      response: error.response?.data,
+      requestData: { customer_id, updateData }
+    });
+    throw error.response?.data || error;
   }
 };

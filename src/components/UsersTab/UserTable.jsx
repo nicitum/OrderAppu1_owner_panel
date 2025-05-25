@@ -24,22 +24,22 @@ export default function UserTable({ users, isLoading, userStatuses, onEditUser, 
         <td className="w-1/3 px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
           <div className="flex items-center">
             {user.username}
-            {isSuperadmin && (
-              <span className="ml-2 px-2 py-1 text-xs font-semibold text-purple-700 bg-purple-100 rounded-full">
-                Superadmin
-              </span>
-            )}
-          </div>
-        </td>
-        <td className="w-1/3 px-6 py-4 whitespace-nowrap text-sm font-medium">
-          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-            status === "active"
-              ? "text-green-700 bg-green-100"
-              : "text-red-700 bg-red-100"
-          }`}>
-            {displayStatus}
+        {isSuperadmin && (
+          <span className="ml-2 px-2 py-1 text-xs font-semibold text-purple-700 bg-purple-100 rounded-full">
+            Superadmin
           </span>
-        </td>
+        )}
+          </div>
+      </td>
+        <td className="w-1/3 px-6 py-4 whitespace-nowrap text-sm font-medium">
+        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+            status === "active"
+            ? "text-green-700 bg-green-100" 
+            : "text-red-700 bg-red-100"
+        }`}>
+            {displayStatus}
+        </span>
+      </td>
         <td className="w-1/3 px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
           <div className="flex justify-end space-x-3">
             <button
@@ -57,23 +57,23 @@ export default function UserTable({ users, isLoading, userStatuses, onEditUser, 
                 className="px-3 py-1 text-sm text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
               >
                 Alter
-              </button>
-            )}
-            {onToggleBlock && (
-              <button
+            </button>
+          )}
+          {onToggleBlock && (
+            <button
                 onClick={() => onToggleBlock(user.customer_id, status)}
                 className={`px-3 py-1 text-sm rounded-md transition-colors ${
                   status === "active"
                     ? "text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100"
                     : "text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100"
-                }`}
-              >
+              }`}
+            >
                 {status === "active" ? "Block" : "Unblock"}
-              </button>
-            )}
-          </div>
-        </td>
-      </tr>
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
     );
   };
 

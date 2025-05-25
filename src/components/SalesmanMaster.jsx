@@ -1,21 +1,13 @@
 import React, { useState, useEffect } from "react";
-import {
-  getSalesmen,
-  toggleSalesmanBlock,
-  updateSalesman,
-  addSalesman,
-  getAssignedSalesmen,
-  getUserRoleCounts,
-  routeCRUD,
-  fetchSalesmen,
-} from "../services/api";
+import { getSalesmen, addSalesman, updateSalesman ,getUserRoleCounts, uploadSalesmanImage } from "../services/api";
 import toast from "react-hot-toast";
 import SearchBar from "./SalesmanMaster/SearchBar";
 import SalesmanTable from "./SalesmanMaster/SalesmanTable";
 import EditSalesmanModal from "./SalesmanMaster/EditSalesmanModal";
 import axios from "axios";
 import * as XLSX from 'xlsx';
-import { Plus } from 'lucide-react';
+import { Plus, User } from 'lucide-react';
+import { routeCRUD } from "../services/api";
 
 export default function SalesmanMaster() {
   const [salesmen, setSalesmen] = useState([]);
@@ -37,27 +29,41 @@ export default function SalesmanMaster() {
   const initialFormState = {
     username: "",
     customer_id: "",
-    phone: "",
-    password: "",
-    name: "",
-    email: "",
-    route: "",
-    delivery_address: "",
-    gst_number: "",
     address_line1: "",
-    address_line2: "",
-    address_line3: "",
-    address_line4: "",
-    city: "",
-    state: "",
-    zip_code: "",
-    role: "salesman",
+    phone: "",
+    designation: "",
+    aadhar_number: "",
+    pan_number: "",
+    dl_number: "",
+    notes: "",
+    role: "ADMIN"
   };
 
   const [editForm, setEditForm] = useState(initialFormState);
   const [newSalesman, setNewSalesman] = useState(initialFormState);
   const [formErrors, setFormErrors] = useState({});
   const loggedInUser = JSON.parse(localStorage.getItem("loggedInUser"));
+
+  // Track if limit is reached for disabling button
+  const [isSalesmanLimitReached, setIsSalesmanLimitReached] = useState(false);
+
+  // Update limit state whenever salesmen or client status changes
+  useEffect(() => {
+    async function checkLimit() {
+      const [roleCountsResponse, clientStatusResponse] = await Promise.all([
+        getUserRoleCounts(),
+        axios.get('http://147.93.110.150:3001/api/client_status/APPU0009')
+      ]);
+      if (roleCountsResponse.success && clientStatusResponse.data.success) {
+        const roleCounts = roleCountsResponse.data;
+        const clientStatus = clientStatusResponse.data.data[0];
+        const currentSalesmanCount = roleCounts.salesman || 0;
+        const allowedSalesmanCount = clientStatus.sales_mgr_login || 0;
+        setIsSalesmanLimitReached(currentSalesmanCount >= allowedSalesmanCount);
+      }
+    }
+    checkLimit();
+  }, [salesmen]);
 
   // Fetch client prefixes
   const fetchClientPrefixes = async () => {
@@ -84,7 +90,7 @@ export default function SalesmanMaster() {
   // Generate customer ID with prefix
   const generateCustomerId = async (prefix) => {
     try {
-      const allUsers = await fetchSalesmen();
+      const allUsers = await getSalesmen();
       console.log("All users:", allUsers); // Debug log
       
       const prefixUsers = allUsers.filter(user => 
@@ -123,26 +129,8 @@ export default function SalesmanMaster() {
   const fetchSalesmenData = async (search) => {
     setIsLoading(true);
     try {
-      if (loggedInUser?.role === "superadmin") {
-        const data = await fetchSalesmen();
-        // Filter based on search term if provided
-        const filteredData = search
-          ? data.filter(salesman => 
-              salesman.name?.toLowerCase().includes(search.toLowerCase()) ||
-              salesman.phone?.includes(search) ||
-              salesman.route?.toLowerCase().includes(search.toLowerCase())
-            )
-          : data;
-        setSalesmen(filteredData);
-      } else if (loggedInUser?.role === "admin") {
-        const result = await getAssignedSalesmen(loggedInUser.id1);
-        if (result.success) {
-          setSalesmen(result.assignedUsers);
-        } else {
-          setSalesmen([]);
-          toast.error(result.message || "Failed to fetch assigned salesmen");
-        }
-      }
+      const data = await getSalesmen(search);
+      setSalesmen(data);
     } catch (error) {
       toast.error("Failed to fetch salesmen");
       console.error("Error fetching salesmen:", error);
@@ -183,57 +171,38 @@ export default function SalesmanMaster() {
     setEditForm({
       username: salesman.username || "",
       customer_id: salesman.customer_id || "",
-      phone: salesman.phone || "",
-      password: "",
-      name: salesman.name || "",
-      email: salesman.email || "",
-      route: salesman.route || "",
-      delivery_address: salesman.delivery_address || "",
-      gst_number: salesman.gst_number || "",
       address_line1: salesman.address_line1 || "",
-      address_line2: salesman.address_line2 || "",
-      address_line3: salesman.address_line3 || "",
-      address_line4: salesman.address_line4 || "",
-      city: salesman.city || "",
-      state: salesman.state || "",
-      zip_code: salesman.zip_code || "",
-      role: "salesman",
+      phone: salesman.phone || "",
+      designation: salesman.designation || "",
+      aadhar_number: salesman.aadhar_number || "",
+      pan_number: salesman.pan_number || "",
+      dl_number: salesman.dl_number || "",
+      notes: salesman.notes || "",
+      role: "ADMIN"
     });
   };
 
-  const handleUpdateSalesman = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm(editForm)) return;
-    
+  const handleUpdateSalesman = async (customer_id, formData) => {
     try {
-      const updateData = {
-        ...editForm,
-        role: 'admin'
-      };
-      await updateSalesman(selectedSalesman.customer_id, updateData);
-      fetchSalesmenData(searchTerm);
-      setSelectedSalesman(null);
-      toast.success("Salesman updated successfully");
+      const response = await updateSalesman(customer_id, formData);
+      if (response.success) {
+        await fetchSalesmenData(searchTerm);
+        setSelectedSalesman(null);
+        return response;
+      }
+      throw new Error(response.message || "Failed to update salesman");
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to update salesman");
+      console.error('Error updating salesman:', error);
+      throw error;
     }
   };
 
   const validateForm = (formData) => {
     const errors = {};
 
-    if (!formData.name) errors.name = "Name is required";
-    if (!formData.phone) errors.phone = "Phone is required";
-    if (!formData.route) errors.route = "Route is required";
-    if (!formData.city) errors.city = "City is required";
-    if (!formData.state) errors.state = "State is required";
-    if (!formData.zip_code) errors.zip_code = "Zip code is required";
+    // Only username and customer_id are required
     if (!formData.username) errors.username = "Username is required";
-    if (!formData.email) errors.email = "Email is required";
-    if (formData.email && !/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = "Please enter a valid email address";
-    }
+    if (!formData.customer_id) errors.customer_id = "Customer ID is required";
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -248,8 +217,6 @@ export default function SalesmanMaster() {
       ]);
 
       if (!roleCountsResponse.success || !clientStatusResponse.data.success) {
-        console.error("Role counts response:", roleCountsResponse);
-        console.error("Client status response:", clientStatusResponse);
         toast.error("Failed to fetch role counts. Please try again.");
         return false;
       }
@@ -257,23 +224,17 @@ export default function SalesmanMaster() {
       const roleCounts = roleCountsResponse.data;
       const clientStatus = clientStatusResponse.data.data[0];
 
-      console.log("Role counts:", roleCounts);
-      console.log("Client status:", clientStatus);
+      // Only check admin (salesman) login limit
+      const currentAdminCount = roleCounts.admin || 0;
+      const allowedAdminCount = clientStatus.sales_mgr_login || 0;
 
-      const currentSalesmanCount = roleCounts.salesman || 0;
-      const allowedSalesmanCount = clientStatus.sales_mgr_login || 0;
-
-      console.log("Current salesman count:", currentSalesmanCount);
-      console.log("Allowed salesman count:", allowedSalesmanCount);
-
-      if (currentSalesmanCount >= allowedSalesmanCount) {
-        toast.error(`Maximum salesman limit reached (${currentSalesmanCount}/${allowedSalesmanCount}). Please upgrade your plan or contact administrator.`);
+      if (currentAdminCount >= allowedAdminCount) {
+        toast.error(`Maximum salesman limit reached (${currentAdminCount}/${allowedAdminCount}). Please upgrade your plan or contact administrator.`);
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error("Error checking salesman limits:", error);
       toast.error("Failed to check salesman limits. Please try again.");
       return false;
     } finally {
@@ -282,97 +243,97 @@ export default function SalesmanMaster() {
   };
 
   const handleAddSalesmanClick = async () => {
+    // Check salesman limits before opening modal
     const canAddSalesman = await checkSalesmanLimits();
-    if (canAddSalesman) {
-      // Always use 'SM' as prefix for salesmen
-      const newCustomerId = await generateCustomerId('SM');
-      console.log("Generated new customer ID:", newCustomerId); // Debug log
-      setNewSalesman(prev => ({
-        ...prev,
-        customer_id: newCustomerId,
-        role: 'admin'
-      }));
-      setShowAddModal(true);
+    if (!canAddSalesman) {
+      toast.error('Salesman limit reached. Cannot add more salesmen.');
+      return;
     }
+    // Always use 'SM' as prefix for salesmen
+    const newCustomerId = await generateCustomerId('SM');
+    setNewSalesman(prev => ({
+      ...prev,
+      customer_id: newCustomerId,
+      role: 'admin'
+    }));
+    setShowAddModal(true);
   };
 
   const handleAddSalesman = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm(newSalesman)) return;
-    
+    // Double check limit before submit
+    const canAddSalesman = await checkSalesmanLimits();
+    if (!canAddSalesman) {
+      toast.error('Salesman limit reached. Cannot add more salesmen.');
+      setShowAddModal(false);
+      return;
+    }
+    if (!validateForm(newSalesman)) {
+      toast.error('Please fill all required fields.');
+      return;
+    }
+
     try {
       setIsLoading(true);
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(newSalesman.email)) {
-        toast.error("Please enter a valid email address");
+      console.log('Submitting new salesman:', newSalesman); // DEBUG
+      // First check if we can add more salesmen
+      const canAddSalesman = await checkSalesmanLimits();
+      if (!canAddSalesman) {
+        toast.error('Salesman limit reached.');
         return;
       }
 
-      const [roleCountsResponse, clientStatusResponse] = await Promise.all([
-        getUserRoleCounts(),
-        axios.get('http://147.93.110.150:3001/api/client_status/APPU0009')
-      ]);
-
-      if (!roleCountsResponse.success || !clientStatusResponse.data.success) {
-        console.error("Role counts response:", roleCountsResponse);
-        console.error("Client status response:", clientStatusResponse);
-        toast.error("Failed to fetch role counts. Please try again.");
-        return;
-      }
-
-      const roleCounts = roleCountsResponse.data;
-      const clientStatus = clientStatusResponse.data.data[0];
-
-      console.log("Role counts:", roleCounts);
-      console.log("Client status:", clientStatus);
-
-      const currentSalesmanCount = roleCounts.salesman || 0;
-      const allowedSalesmanCount = clientStatus.sales_mgr_login || 0;
-
-      console.log("Current salesman count:", currentSalesmanCount);
-      console.log("Allowed salesman count:", allowedSalesmanCount);
-
-      if (currentSalesmanCount >= allowedSalesmanCount) {
-        toast.error(`Maximum salesman limit reached (${currentSalesmanCount}/${allowedSalesmanCount}). Please upgrade your plan or contact administrator.`);
-        return;
-      }
-
+      // Prepare the data for API
       const salesmanData = {
-        ...newSalesman,
-        phone: String(newSalesman.phone).trim(),
-        password: newSalesman.username,
-        email: newSalesman.email.trim(),
-        role: 'admin'
+        customer_id: newSalesman.customer_id,
+        username: newSalesman.username?.trim() || "",
+        name: newSalesman.username?.trim() || "",
+        phone: newSalesman.phone?.trim() || null,
+        address_line1: newSalesman.address_line1?.trim() || null,
+        designation: newSalesman.designation?.trim() || null,
+        route: newSalesman.route || null,
+        aadhar_number: newSalesman.aadhar_number?.trim() || null,
+        pan_number: newSalesman.pan_number?.trim() || null,
+        dl_number: newSalesman.dl_number?.trim() || null,
+        notes: newSalesman.notes?.trim() || null
       };
-      
-      console.log("Sending salesman data:", salesmanData);
+
+      console.log('Sending to API:', salesmanData); // DEBUG
       const response = await addSalesman(salesmanData);
-      console.log("Add salesman response:", response);
-      
-      if (response.status === true) {
+      console.log('Add salesman response:', response); // DEBUG
+      let imageUploaded = false;
+      let imageFilename = null;
+      if (response.success) {
+        // If image file is selected, upload it
+        if (newSalesman.imageFile) {
+          try {
+            const uploadResponse = await uploadSalesmanImage(newSalesman.customer_id, newSalesman.imageFile);
+            if (uploadResponse.success || uploadResponse.status) {
+              imageUploaded = true;
+              imageFilename = uploadResponse.data?.filename || uploadResponse.filename;
+              // Update the salesman with the image filename
+              if (imageFilename) {
+                await updateSalesman(newSalesman.customer_id, { image: imageFilename });
+              }
+            } else {
+              toast.error(uploadResponse.message || 'Image upload failed');
+            }
+          } catch (imgErr) {
+            toast.error(imgErr.message || 'Image upload failed');
+          }
+        }
         await fetchSalesmenData(searchTerm);
         setShowAddModal(false);
         resetNewSalesmanForm();
-        toast.success(response.message || "Salesman added successfully");
+        toast.success(
+          (imageUploaded ? 'Salesman and image added successfully' : response.message || 'Salesman added successfully')
+        );
       } else {
         throw new Error(response.message || 'Failed to add salesman');
       }
     } catch (error) {
-      console.error("Add salesman error details:", {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
-      
-      if (error.response?.data?.message) {
-        toast.error(error.response.data.message);
-      } else if (error.message) {
-        toast.error(error.message);
-      } else {
-        toast.error("Failed to add salesman. Please try again.");
-      }
+      console.error('Error adding salesman:', error);
+      toast.error(error.response?.data?.message || error.message || 'Failed to add salesman');
     } finally {
       setIsLoading(false);
     }
@@ -398,72 +359,50 @@ export default function SalesmanMaster() {
     }
   };
 
-  // Add this new function to fetch routes
+  // Fetch routes
   const fetchRoutes = async () => {
     try {
+      // Assuming routeCRUD API is available and works like in UsersTab
       const response = await routeCRUD('read');
       if (response.success) {
         setRoutes(response.data);
+      } else {
+        toast.error(response.message || 'Failed to fetch routes');
       }
     } catch (error) {
+      console.error('Error fetching routes:', error);
       toast.error('Failed to fetch routes');
     }
   };
 
-  // Add this new function to handle adding a new route
+  // Handle adding a new route
   const handleAddRoute = async (e) => {
     e.preventDefault();
+    if (!newRouteName.trim()) {
+      toast.error('Route name cannot be empty.');
+      return;
+    }
     try {
-      const response = await routeCRUD('create', { name: newRouteName });
+      // Assuming routeCRUD API for create is available
+      const response = await routeCRUD('create', { name: newRouteName.trim() });
       if (response.success) {
         toast.success('Route added successfully');
         setShowAddRouteModal(false);
         setNewRouteName('');
-        fetchRoutes();
+        fetchRoutes(); // Refresh routes after adding new one
+      } else {
+        toast.error(response.message || 'Failed to add route');
       }
     } catch (error) {
+      console.error('Error adding route:', error);
       toast.error(error.message || 'Failed to add route');
     }
   };
 
+  // Fetch routes on component mount
   useEffect(() => {
     fetchRoutes();
   }, []);
-
-  // Modify the route input in both add salesman and edit salesman forms
-  const renderRouteInput = (formData, setFormData, errors) => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Route *
-      </label>
-      <div className="flex gap-2">
-        <select
-          name="route"
-          required
-          value={formData.route}
-          onChange={(e) => setFormData({ ...formData, route: e.target.value })}
-          className={`flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${errors?.route ? "border-red-500" : ""}`}
-        >
-          <option value="">Select a route</option>
-          {routes.map((route) => (
-            <option key={route.id} value={route.name}>
-              {route.name}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={() => setShowAddRouteModal(true)}
-          className="px-2 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
-      {errors?.route && (
-        <p className="mt-1 text-sm text-red-600">{errors.route}</p>
-      )}
-    </div>
-  );
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -479,7 +418,7 @@ export default function SalesmanMaster() {
           <button
             onClick={handleAddSalesmanClick}
             className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors shadow-sm"
-            disabled={isLoading || isCheckingLimits}
+            disabled={isLoading || isCheckingLimits || isSalesmanLimitReached}
           >
             {isLoading || isCheckingLimits ? "Loading..." : "Add New Salesman"}
           </button>
@@ -499,10 +438,47 @@ export default function SalesmanMaster() {
           salesman={selectedSalesman}
           editForm={editForm}
           onEditFormChange={setEditForm}
-          onClose={() => setSelectedSalesman(null)}
+          onClose={() => {
+            setSelectedSalesman(null);
+            fetchSalesmenData(searchTerm);
+          }}
           onSave={handleUpdateSalesman}
           errors={formErrors}
-          renderRouteInput={() => renderRouteInput(editForm, setEditForm, formErrors)}
+          renderRouteInput={() => (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Route
+              </label>
+              <div className="flex gap-2">
+                <select
+                  name="route"
+                  value={editForm.route}
+                  onChange={(e) => setEditForm({ ...editForm, route: e.target.value })}
+                  className={`flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors?.route ? "border-red-500" : ""}`}
+                >
+                  <option value="">Select a route</option>
+                  {routes.map((route) => (
+                    <option key={route.id} value={route.name}>
+                      {route.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAddRouteModal(true)}
+                  className="px-2 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+              {formErrors?.route && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.route}</p>
+              )}
+            </div>
+          )}
+          onImageUpdated={() => fetchSalesmenData(searchTerm)}
+          routes={routes}
+          setShowAddRouteModal={setShowAddRouteModal}
         />
       )}
 
@@ -524,28 +500,81 @@ export default function SalesmanMaster() {
             </div>
             
             <form onSubmit={handleAddSalesman} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Username *
-                  </label>
-                  <input
-                    type="text"
-                    name="username"
-                    required
-                    value={newSalesman.username}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.username ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.username && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>
+              {/* Image Upload Section - Centered at Top */}
+              <div className="flex justify-center mb-6">
+                <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-gray-200">
+                  {newSalesman.imagePreview ? (
+                    <img src={newSalesman.imagePreview} alt="Salesman" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                      <User className="h-12 w-12 text-gray-400" />
+                    </div>
                   )}
                 </div>
-                
+              </div>
+              <div className="flex justify-center mb-6">
+                <label className="cursor-pointer bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">
+                  <span>Upload Image (optional)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        setNewSalesman(prev => ({
+                          ...prev,
+                          imageFile: file,
+                          imagePreview: URL.createObjectURL(file)
+                        }));
+                      }
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Sales Man Name - Full Width */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sales Man Name *</label>
+                <input
+                  type="text"
+                  name="username"
+                  required
+                  value={newSalesman.username}
+                  onChange={handleInputChange}
+                  className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.username ? "border-red-500" : ""}`}
+                />
+                {formErrors.username && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>
+                )}
+              </div>
+
+              {/* Address - Full Width */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <input
+                  type="text"
+                  name="address_line1"
+                  value={newSalesman.address_line1}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+              </div>
+
+              {/* Designation / Salesman Code - Two Columns */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Customer ID *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Designation</label>
+                  <input
+                    type="text"
+                    name="designation"
+                    value={newSalesman.designation}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Salesman Code *</label>
                   <input
                     type="text"
                     name="customer_id"
@@ -556,188 +585,97 @@ export default function SalesmanMaster() {
                   />
                   <p className="mt-1 text-sm text-gray-500">Auto-generated field</p>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
+              </div>
+
+              {/* Route Input with Add Shortcut */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Route *</label>
+                <div className="flex gap-2">
+                  <select
+                    name="route"
                     required
-                    value={newSalesman.name}
+                    value={newSalesman.route}
                     onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.name ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.name && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
-                  )}
+                    className={`flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.route ? "border-red-500" : ""}`}
+                  >
+                    <option value="">Select a route</option>
+                    {routes.map((route) => (
+                      <option key={route.id} value={route.name}>
+                        {route.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddRouteModal(true)}
+                    className="px-2 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
-                
+                {formErrors.route && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.route}</p>
+                )}
+              </div>
+
+              {/* Mobile No / Aadhar No - Two Columns */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone Number *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mobile No</label>
                   <input
                     type="tel"
                     name="phone"
-                    required
                     value={newSalesman.phone}
                     onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.phone ? "border-red-500" : ""}`}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
-                  {formErrors.phone && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
-                  )}
                 </div>
-                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email *
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    required
-                    value={newSalesman.email}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.email ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.email && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
-                  )}
-                </div>
-                
-                {renderRouteInput(newSalesman, setNewSalesman, formErrors)}
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    GST Number
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Aadhar No</label>
                   <input
                     type="text"
-                    name="gst_number"
-                    value={newSalesman.gst_number}
+                    name="aadhar_number"
+                    value={newSalesman.aadhar_number}
                     onChange={handleInputChange}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
                 </div>
-                
+              </div>
+
+              {/* PAN No / DL No - Two Columns */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Delivery Address
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">PAN No</label>
                   <input
                     type="text"
-                    name="delivery_address"
-                    value={newSalesman.delivery_address}
+                    name="pan_number"
+                    value={newSalesman.pan_number}
                     onChange={handleInputChange}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
                 </div>
-                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 1
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">DL No</label>
                   <input
                     type="text"
-                    name="address_line1"
-                    value={newSalesman.address_line1}
+                    name="dl_number"
+                    value={newSalesman.dl_number}
                     onChange={handleInputChange}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 2
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line2"
-                    value={newSalesman.address_line2}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 3
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line3"
-                    value={newSalesman.address_line3}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 4
-                  </label>
-                  <input
-                    type="text"
-                    name="address_line4"
-                    value={newSalesman.address_line4}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    name="city"
-                    required
-                    value={newSalesman.city}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.city ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.city && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.city}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State *
-                  </label>
-                  <input
-                    type="text"
-                    name="state"
-                    required
-                    value={newSalesman.state}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.state ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.state && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.state}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Zip Code *
-                  </label>
-                  <input
-                    type="text"
-                    name="zip_code"
-                    required
-                    value={newSalesman.zip_code}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.zip_code ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.zip_code && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.zip_code}</p>
-                  )}
-                </div>
+              </div>
+
+              {/* Notes - Full Width */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea
+                  name="notes"
+                  value={newSalesman.notes}
+                  onChange={handleInputChange}
+                  rows="3"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
               </div>
 
               <div className="flex justify-end space-x-3 pt-6">
@@ -818,4 +756,4 @@ export default function SalesmanMaster() {
       )}
     </div>
   );
-} 
+}
