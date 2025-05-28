@@ -12,8 +12,8 @@ const LogoutButton = () => {
     localStorage.removeItem('loggedInUser');
     sessionStorage.clear(); // Clear any session data
     
-    // Force clear any cached data
-    window.location.href = '/login';
+    // Use react-router-dom navigation to the root path
+    navigate('/'); // Navigate to the root, which will be handled by App.jsx routing
   };
 
   return (

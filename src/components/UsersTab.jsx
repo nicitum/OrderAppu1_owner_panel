@@ -41,6 +41,8 @@ export default function UsersTab() {
   const [showAddRouteModal, setShowAddRouteModal] = useState(false);
   const [newRouteName, setNewRouteName] = useState('');
   const [userStatuses, setUserStatuses] = useState({});
+  const [showAlert, setShowAlert] = useState(false);
+  const [showDisplayModal, setShowDisplayModal] = useState(false);
 
   // Form states for both edit and add
   const initialFormState = {
@@ -305,16 +307,35 @@ export default function UsersTab() {
   };
 
   const handleAddUserClick = async () => {
-    const canAddUser = await checkUserLimits();
-    if (canAddUser) {
-      // Generate customer_id with prefix when opening the modal
+    try {
+      setIsCheckingLimits(true);
+      // First check if we can add more users
+      const canAddUser = await checkUserLimits();
+      if (!canAddUser) {
+        toast.error('User limit reached. Cannot add more users.');
+        return;
+      }
+
+      // Generate customer_id with prefix
       const newCustomerId = await generateCustomerId(clientPrefixes.customer_prefix);
-      setNewUser(prev => ({
-        ...prev,
+      if (!newCustomerId) {
+        toast.error('Failed to generate customer ID');
+        return;
+      }
+
+      // Reset form and set new customer ID
+      setNewUser({
+        ...initialFormState,
         customer_id: newCustomerId,
-        role: 'user' // Ensure role is set to user
-      }));
+        role: 'user'
+      });
+      setFormErrors({});
       setShowAddModal(true);
+    } catch (error) {
+      console.error("Error in handleAddUserClick:", error);
+      toast.error("Failed to open Add Customer modal");
+    } finally {
+      setIsCheckingLimits(false);
     }
   };
 
@@ -663,6 +684,97 @@ export default function UsersTab() {
         onEditUser={loggedInUser?.role === "superadmin" ? handleEditUser : null}
       />
 
+      {/* Display Modal */}
+      {showDisplayModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold text-gray-900">Customer Details</h3>
+              <button 
+                onClick={() => setShowDisplayModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Business Name</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.username}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Customer Name</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.name}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Customer Code</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.customer_id}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.email}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Mobile Number</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.phone}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Country</label>
+                <p className="mt-1 text-sm text-gray-900">India</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">State</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.state}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">City</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.city}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Route</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.route}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Pin Code</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.zip_code}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">GST Number</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.gst_number || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Address Line 1</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.address_line1 || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Address Line 2</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.address_line2 || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Address Line 3</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.address_line3 || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Address Line 4</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.address_line4 || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Delivery Address</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedUser.delivery_address || 'N/A'}</p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowDisplayModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit User Modal */}
       {selectedUser && (
         <EditUserModal
@@ -673,7 +785,37 @@ export default function UsersTab() {
           onSave={handleUpdateUser}
           errors={formErrors}
           hideRoleField={true}
-          renderRouteInput={() => renderRouteInput(editForm, setEditForm, formErrors)}
+          renderRouteInput={() => (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Route *</label>
+              <div className="flex gap-2">
+                <select
+                  name="route"
+                  required
+                  value={editForm.route}
+                  onChange={(e) => setEditForm({ ...editForm, route: e.target.value })}
+                  className={`w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.route ? "border-red-500" : ""}`}
+                >
+                  <option value="">Select a route</option>
+                  {routes.map((route) => (
+                    <option key={route.id} value={route.name}>
+                      {route.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAddRouteModal(true)}
+                  className="px-2 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+              {formErrors.route && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.route}</p>
+              )}
+            </div>
+          )}
         />
       )}
 
@@ -694,221 +836,272 @@ export default function UsersTab() {
               </button>
             </div>
             <form onSubmit={handleAddUser} className="space-y-6">
-              <div className="grid grid-cols-1 gap-6">
-                {/* Business Name (username) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Business Name *</label>
-                  <input
-                    type="text"
-                    name="username"
-                    required
-                    value={newUser.username}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.username ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.username && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>
-                  )}
-                </div>
-              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Alias */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Alias</label>
-                  <input
-                    type="text"
-                    name="alias"
-                    value={newUser.alias}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    placeholder="Optional alias name"
-                  />
+                {/* Left Column */}
+                <div className="space-y-6">
+                  {/* Business Name (username) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Business Name *</label>
+                    <input
+                      type="text"
+                      name="username"
+                      required
+                      value={newUser.username}
+                      onChange={handleInputChange}
+                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.username ? "border-red-500" : ""}`}
+                    />
+                    {formErrors.username && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.username}</p>
+                    )}
+                  </div>
+
+                  {/* Customer Name (name) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      required
+                      value={newUser.name}
+                      onChange={handleInputChange}
+                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.name ? "border-red-500" : ""}`}
+                    />
+                    {formErrors.name && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
+                    )}
+                  </div>
+
+                  {/* Alias */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Alias</label>
+                    <input
+                      type="text"
+                      name="alias"
+                      value={newUser.alias}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      placeholder="Optional alias name"
+                    />
+                  </div>
+
+                  {/* Address Line 1 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
+                    <input
+                      type="text"
+                      name="address_line1"
+                      value={newUser.address_line1}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+
+                  {/* Address Line 2 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
+                    <input
+                      type="text"
+                      name="address_line2"
+                      value={newUser.address_line2}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+
+                  {/* Address Line 3 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 3</label>
+                    <input
+                      type="text"
+                      name="address_line3"
+                      value={newUser.address_line3}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+
+                  {/* Address Line 4 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 4</label>
+                    <input
+                      type="text"
+                      name="address_line4"
+                      value={newUser.address_line4}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+
+                  {/* Route */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Route *</label>
+                    <div className="flex gap-2">
+                      <select
+                        name="route"
+                        required
+                        value={newUser.route}
+                        onChange={handleInputChange}
+                        className={`w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.route ? "border-red-500" : ""}`}
+                      >
+                        <option value="">Select a route</option>
+                        {routes.map((route) => (
+                          <option key={route.id} value={route.name}>
+                            {route.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddRouteModal(true)}
+                        className="px-2 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {formErrors.route && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.route}</p>
+                    )}
+                  </div>
                 </div>
-                {/* Customer Code (customer_id) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer Code *</label>
-                  <input
-                    type="text"
-                    name="customer_id"
-                    required
-                    value={newUser.customer_id}
-                    disabled
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed"
-                  />
-                  <p className="mt-1 text-sm text-gray-500">Auto-generated field</p>
+
+                {/* Right Column */}
+                <div className="space-y-6">
+                  {/* Customer Code (customer_id) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Customer Code *</label>
+                    <input
+                      type="text"
+                      name="customer_id"
+                      required
+                      value={newUser.customer_id}
+                      disabled
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">Auto-generated field</p>
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                    <input
+                      type="email"
+                      name="email"
+                      required
+                      value={newUser.email}
+                      onChange={handleInputChange}
+                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.email ? "border-red-500" : ""}`}
+                    />
+                    {formErrors.email && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
+                    )}
+                  </div>
+
+                  {/* Mobile Number (phone) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number *</label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      required
+                      value={newUser.phone}
+                      onChange={handleInputChange}
+                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.phone ? "border-red-500" : ""}`}
+                    />
+                    {formErrors.phone && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
+                    )}
+                  </div>
+
+                  {/* City */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                    <input
+                      type="text"
+                      name="city"
+                      required
+                      value={newUser.city}
+                      onChange={handleInputChange}
+                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.city ? "border-red-500" : ""}`}
+                    />
+                    {formErrors.city && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.city}</p>
+                    )}
+                  </div>
+
+                  {/* State (dropdown) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
+                    <select
+                      name="state"
+                      required
+                      value={newUser.state}
+                      onChange={handleInputChange}
+                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.state ? "border-red-500" : ""}`}
+                    >
+                      <option value="">Select a state</option>
+                      {INDIAN_STATES.map((state) => (
+                        <option key={state} value={state}>{state}</option>
+                      ))}
+                    </select>
+                    {formErrors.state && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.state}</p>
+                    )}
+                  </div>
+
+                  {/* Country (fixed) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                    <input
+                      type="text"
+                      name="country"
+                      value="India"
+                      disabled
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                    />
+                  </div>
+
+                  {/* Pin Code (zip_code) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Pin Code *</label>
+                    <input
+                      type="text"
+                      name="zip_code"
+                      required
+                      value={newUser.zip_code}
+                      onChange={handleInputChange}
+                      className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.zip_code ? "border-red-500" : ""}`}
+                    />
+                    {formErrors.zip_code && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.zip_code}</p>
+                    )}
+                  </div>
+
+                  {/* GST Number */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
+                    <input
+                      type="text"
+                      name="gst_number"
+                      value={newUser.gst_number}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
                 </div>
-                {/* Customer Name (name) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name *</label>
-                  <input
-                    type="text"
-                    name="name"
-                    required
-                    value={newUser.name}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.name ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.name && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
-                  )}
-                </div>
-                {/* Email */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                  <input
-                    type="email"
-                    name="email"
-                    required
-                    value={newUser.email}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.email ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.email && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
-                  )}
-                </div>
-                {/* Mobile Number (phone) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number *</label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    required
-                    value={newUser.phone}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.phone ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.phone && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
-                  )}
-                </div>
-                {/* City */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
-                  <input
-                    type="text"
-                    name="city"
-                    required
-                    value={newUser.city}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.city ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.city && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.city}</p>
-                  )}
-                </div>
-                {/* Address Line 1 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
-                  <input
-                    type="text"
-                    name="address_line1"
-                    value={newUser.address_line1}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                {/* Country (fixed) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
-                  <input
-                    type="text"
-                    name="country"
-                    value="India"
-                    disabled
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 text-gray-500 cursor-not-allowed"
-                  />
-                </div>
-                {/* Address Line 2 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
-                  <input
-                    type="text"
-                    name="address_line2"
-                    value={newUser.address_line2}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                {/* State (dropdown) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
-                  <select
-                    name="state"
-                    required
-                    value={newUser.state}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.state ? "border-red-500" : ""}`}
-                  >
-                    <option value="">Select a state</option>
-                    {INDIAN_STATES.map((state) => (
-                      <option key={state} value={state}>{state}</option>
-                    ))}
-                  </select>
-                  {formErrors.state && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.state}</p>
-                  )}
-                </div>
-                {/* Address Line 3 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 3</label>
-                  <input
-                    type="text"
-                    name="address_line3"
-                    value={newUser.address_line3}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                {/* Pin Code (zip_code) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Pin Code *</label>
-                  <input
-                    type="text"
-                    name="zip_code"
-                    required
-                    value={newUser.zip_code}
-                    onChange={handleInputChange}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.zip_code ? "border-red-500" : ""}`}
-                  />
-                  {formErrors.zip_code && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.zip_code}</p>
-                  )}
-                </div>
-                {/* Address Line 4 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 4</label>
-                  <input
-                    type="text"
-                    name="address_line4"
-                    value={newUser.address_line4}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                {/* GST Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
-                  <input
-                    type="text"
-                    name="gst_number"
-                    value={newUser.gst_number}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-                {/* Delivery Address (full width, more space) */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
-                  <textarea
-                    name="delivery_address"
-                    value={newUser.delivery_address}
-                    onChange={handleInputChange}
-                    rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
               </div>
+
+              {/* Delivery Address (full width, more space) */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
+                <textarea
+                  name="delivery_address"
+                  value={newUser.delivery_address}
+                  onChange={handleInputChange}
+                  rows={3}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
               </div>
+
               <div className="flex justify-end space-x-3 pt-6">
                 <button
                   type="button"

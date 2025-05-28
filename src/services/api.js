@@ -12,12 +12,8 @@ const api = axios.create({
 // Verify baseURL is set correctly
 console.log('API baseURL:', api.defaults.baseURL);
 
-// Add request interceptor to verify URL for image requests
+// Simple request interceptor to add token
 api.interceptors.request.use((config) => {
-  if (config.url?.includes('/images/')) {
-    console.log('Image request URL:', config.baseURL + config.url);
-  }
-  
   const token = localStorage.getItem("authToken");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -25,35 +21,46 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Add response interceptor to catch 401 errors
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.log("401 Unauthorized error. Token might be invalid or expired.");
-      // Optionally redirect to login page
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
+
 
 export const login = async (username, password, selectedRole) => {
-  const response = await api.post("/auth", { username, password, selectedRole });
-  const token = response.data.token;
-  console.log("Login response:", response.data); // Debug log
-
-  if (token) {
-    const decodedToken = jwtDecode(token);
-    console.log("Decoded token:", decodedToken); // Debug log
-    localStorage.setItem("loggedInUser", JSON.stringify(decodedToken));
-    localStorage.setItem("authToken", token);
-    console.log("Token stored in localStorage"); // Debug log
-  } else {
-    console.log("No token received in login response"); // Debug log
+  try {
+    // Format exactly as backend expects
+    const loginData = {
+      username: username.trim(), // Phone number
+      password: password.trim(), // Phone number
+      role: selectedRole // Send as role
+    };
+    
+    console.log("Sending login data:", loginData); // Debug log
+    
+    const response = await api.post("/auth", loginData);
+    
+    console.log("Login response:", response.data); // Debug log
+    
+    if (response.data.token) {
+      const token = response.data.token;
+      const decodedToken = jwtDecode(token);
+      console.log("Decoded token:", decodedToken); // Debug log
+      
+      // Store both token and user data
+      localStorage.setItem("loggedInUser", JSON.stringify(decodedToken));
+      localStorage.setItem("authToken", token);
+      console.log("Token stored in localStorage"); // Debug log
+      
+      return response.data;
+    } else {
+      throw new Error("No token received in response");
+    }
+  } catch (error) {
+    // Log the exact error from backend
+    console.error("Login error details:", {
+      message: error.message,
+      response: error.response?.data,
+      requestData: { username, password, selectedRole }
+    }); // Debug log
+    throw error;
   }
-
-  return response.data;
 };
 
 export const getOrders = async (date) => {
@@ -72,14 +79,19 @@ export const getUsers = async (search) => {
 
 export const addUser = async (userDetails) => {
   try {
-    // Ensure email is properly formatted and included
+    console.log("Original user details:", userDetails); // Debug log
+    
+    // Just send the user details as is, let backend handle password
     const formattedUserDetails = {
       ...userDetails,
-      email: userDetails.email.trim(), // Ensure email is trimmed
-      password: userDetails.username // Set initial password as username
+      email: userDetails.email.trim() // Just trim email, nothing else
     };
     
+    console.log("Sending to backend:", formattedUserDetails); // Debug log
+    
     const response = await api.post(`/addUser`, formattedUserDetails);
+    
+    console.log("Backend response:", response.data); // Debug log
     
     if (response.data.status === true) {
       return response.data;
@@ -87,6 +99,7 @@ export const addUser = async (userDetails) => {
       throw new Error(response.data.message || "Failed to add user");
     }
   } catch (error) {
+    console.error("Add user error:", error.response?.data || error); // Debug log
     throw error;
   }
 };
@@ -772,4 +785,68 @@ export const updateSalesman = async (customer_id, updateData) => {
     });
     throw error.response?.data || error;
   }
+};
+
+export const changePassword = async (newPassword) => {
+  try {
+    // Log the exact request we're sending
+    console.log('Sending password change request:', {
+      url: '/changePass',
+      data: { newPassword },
+      headers: api.defaults.headers
+    });
+
+    const response = await api.post("/changePass", {
+      newPassword: newPassword
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    // Log the complete response
+    console.log('Password change response:', {
+      status: response.status,
+      statusText: response.statusText,
+      data: response.data,
+      headers: response.headers
+    });
+    
+    if (!response.data.status) {
+      throw new Error(response.data.message || "Failed to change password");
+    }
+    
+    return response.data;
+  } catch (error) {
+    // Log detailed error information
+    console.error("Error changing password:", {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      headers: error.response?.headers
+    });
+    throw error;
+  }
+};
+
+// AUOM CRUD operations
+export const manageAUOM = async (operation, data = {}) => {
+  try {
+    const response = await api.post("/auom-crud", {
+      operation,
+      ...data
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error in AUOM operation:", error);
+    throw error;
+  }
+};
+
+export const createAUOM = async (name) => {
+  return manageAUOM('create', { name });
+};
+
+export const getAUOMs = async () => {
+  return manageAUOM('read');
 };

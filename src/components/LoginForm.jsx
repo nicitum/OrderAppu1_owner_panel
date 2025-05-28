@@ -19,7 +19,7 @@ export default function LoginForm() {
     try {
       console.log("Attempting login with:", { username, password, selectedRole: role });
 
-      const response = await login(username, password, role); // API call
+      const response = await login(username, password, role);
       console.log("Response from backend:", response);
 
       if (!response.token) {
@@ -46,7 +46,7 @@ export default function LoginForm() {
       }
 
       // Store token & role in local storage
-      localStorage.setItem("token", response.token);
+      localStorage.setItem("authToken", response.token);
       localStorage.setItem("role", decodedToken.role);
       localStorage.setItem("loggedInUser", JSON.stringify({
         username: username,

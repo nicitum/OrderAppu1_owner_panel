@@ -14,6 +14,7 @@ import BrandsMaster from './BrandsMaster';
 import CategoriesMaster from './CategoriesMaster';
 import UnitsMaster from './UnitsMaster';
 import StockGroupsMaster from './StockGroupsMaster';
+import ChangePassword from '../pages/ChangePassword.jsx';
 
 export default function Dashboard() {
   const [loggedInUser, setLoggedInUser] = useState(null);
@@ -56,6 +57,7 @@ export default function Dashboard() {
           <Route path="/routes" element={<RouteMaster />} />
           <Route path="/stockgroups" element={<StockGroupsMaster />} />
           <Route path="/salesmen" element={<SalesmanMaster />} />
+          <Route path="/change-password" element={<ChangePassword />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

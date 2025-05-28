@@ -231,21 +231,6 @@ export default function EditUserModal({
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               />
             </div>
-            {/* Pin Code (zip_code) */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Pin Code *</label>
-              <input
-                type="text"
-                name="zip_code"
-                required
-                value={editForm.zip_code}
-                onChange={handleInputChange}
-                className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${errors.zip_code ? "border-red-500" : ""}`}
-              />
-              {errors.zip_code && (
-                <p className="mt-1 text-sm text-red-600">{errors.zip_code}</p>
-              )}
-            </div>
             {/* Address Line 4 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 4</label>
@@ -257,6 +242,10 @@ export default function EditUserModal({
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
               />
             </div>
+
+            {/* Route */}
+            {renderRouteInput && renderRouteInput()}
+
             {/* GST Number */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">GST Number</label>

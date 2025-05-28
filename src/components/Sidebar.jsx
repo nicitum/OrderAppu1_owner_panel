@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import { CreditCard, MapPin, BarChart, Settings, ChevronDown, ChevronRight, Tag } from "lucide-react";
+import { CreditCard, MapPin, BarChart, Settings, ChevronDown, ChevronRight, Tag, Lock } from "lucide-react";
 import LogoutButton from "./LogoutTab";
 import logo from "/assets/logo.jpg"; // Logo import
 
@@ -244,6 +244,17 @@ const Sidebar = () => {
 
             {/* Logout at the very bottom */}
             <div className="mt-6 px-4">
+              <NavLink
+                to="/dashboard/change-password"
+                className={({ isActive }) =>
+                  `flex items-center px-4 py-2 rounded-lg transition-colors ${
+                    isActive ? "bg-[#005599] text-white font-semibold" : "text-gray-100 hover:bg-[#004080]"
+                  }`
+                }
+              >
+                <Lock className="mr-3 h-5 w-5" />
+                Change Password
+              </NavLink>
               <LogoutButton />
             </div>
           </>

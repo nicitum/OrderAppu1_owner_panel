@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import LoginForm from './components/LoginForm';
@@ -16,32 +16,18 @@ const PrivateRoute = ({ children }) => {
   return <>{children}</>;
 };
 
-// Component to handle auth check on mount
-const AuthCheck = ({ children }) => {
-  useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-      window.location.href = '/login';
-    }
-  }, []);
-
-  return children;
-};
-
 function App() {
   return (
-    <Router>
+    <Router basename="/oms1">
       <Toaster position="top-right" />
       <Routes>
         <Route path="/login" element={<LoginForm />} />
         <Route
           path="/dashboard/*"
           element={
-            <AuthCheck>
-              <PrivateRoute>
-                <Dashboard />
-              </PrivateRoute>
-            </AuthCheck>
+            <PrivateRoute>
+              <Dashboard />
+            </PrivateRoute>
           }
         />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

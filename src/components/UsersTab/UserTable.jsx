@@ -110,16 +110,16 @@ export default function UserTable({ users, isLoading, userStatuses, onEditUser, 
             <div><Info label="City" value={user.city} /></div>
             {/* Row 5 */}
             <div><Info label="Address Line 2" value={user.address_line2 || '-'} /></div>
-            <div><Info label="Country" value="India" /></div>
+            <div><Info label="Route" value={user.route || '-'} /></div>
             {/* Row 6 */}
             <div><Info label="Address Line 3" value={user.address_line3 || '-'} /></div>
-            <div><Info label="State" value={user.state} /></div>
+            <div><Info label="Country" value="India" /></div>
             {/* Row 7 */}
             <div><Info label="Address Line 4" value={user.address_line4 || '-'} /></div>
-            <div><Info label="Pin Code" value={user.zip_code} /></div>
+            <div><Info label="State" value={user.state} /></div>
             {/* Row 8 */}
             <div><Info label="GST Number" value={user.gst_number || '-'} /></div>
-            <div></div>
+            <div><Info label="Pin Code" value={user.zip_code} /></div>
             {/* Delivery Address (full width) */}
             <div className="md:col-span-2"><Info label="Delivery Address" value={user.delivery_address || '-'} /></div>
             {/* Status (full width) */}

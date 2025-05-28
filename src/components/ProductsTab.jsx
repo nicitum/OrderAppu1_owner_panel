@@ -16,7 +16,9 @@ import {
   createCategory,
   createUOM,
   getStockGroups,
-  createStockGroup
+  createStockGroup,
+  getAUOMs,
+  createAUOM
 } from "../services/api";
 import { Plus, Edit, Package, Image as ImageIcon, Upload } from "lucide-react";
 import toast from "react-hot-toast";
@@ -53,6 +55,10 @@ export default function ProductsTab() {
   const [stockGroups, setStockGroups] = useState([]);
   const [showStockGroupModal, setShowStockGroupModal] = useState(false);
   const [newStockGroup, setNewStockGroup] = useState("");
+  const [auoms, setAUOMs] = useState([]);
+  const [showAUOMModal, setShowAUOMModal] = useState(false);
+  const [newAUOM, setNewAUOM] = useState("");
+  const [showAUOMFields, setShowAUOMFields] = useState(false);
 
   const [newProduct, setNewProduct] = useState({
     product_code: "",
@@ -69,7 +75,10 @@ export default function ProductsTab() {
     hsn_code: "",
     gst_rate: "",
     type_of_supply: "",
-    stock_quantity: ""
+    stock_quantity: "",
+    auom: "",
+    uom_qty: "",
+    auom_qty: ""
   });
   
   const [currentProduct, setCurrentProduct] = useState({
@@ -88,12 +97,24 @@ export default function ProductsTab() {
     hsn_code: "",
     gst_rate: "",
     type_of_supply: "",
-    stock_quantity: ""
+    stock_quantity: "",
+    auom: "",
+    uom_qty: "",
+    auom_qty: ""
   });
   
   const [imageFiles, setImageFiles] = useState({});
   const [loadedImages, setLoadedImages] = useState({});
   const fileInputRef = useRef(null);
+
+  // Add this helper function at the top of the component
+  const formatQuantity = (value) => {
+    if (!value && value !== 0) return '-';
+    const num = parseFloat(value);
+    if (isNaN(num)) return '-';
+    // If it's a whole number, show as integer, otherwise show 2 decimal places
+    return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+  };
 
   // Fetch product prefix and generate next product code
   const fetchProductPrefix = async () => {
@@ -234,7 +255,7 @@ export default function ProductsTab() {
       return;
     }
     try {
-      const productCode = newProduct.product_code; // Use the generated code from state
+      const productCode = newProduct.product_code;
       const currentDate = new Date().toISOString();
 
       await addProduct({
@@ -255,10 +276,13 @@ export default function ProductsTab() {
         uom: newProduct.unit_of_measure,
         type_of_supply: newProduct.type_of_supply,
         stock_quantity: newProduct.stock_quantity ? parseInt(newProduct.stock_quantity) : 0,
+        auom: newProduct.auom || null,
+        uom_qty: newProduct.uom_qty ? parseFloat(newProduct.uom_qty) : null,
+        auom_qty: newProduct.auom_qty ? parseFloat(newProduct.auom_qty) : null
       });
 
       await fetchProducts();
-      setShowAddModal(false); // Always close modal after add
+      setShowAddModal(false);
       setNewProduct({
         product_code: "",
         name: "",
@@ -274,7 +298,10 @@ export default function ProductsTab() {
         hsn_code: "",
         gst_rate: "",
         type_of_supply: "",
-        stock_quantity: ""
+        stock_quantity: "",
+        auom: "",
+        uom_qty: "",
+        auom_qty: ""
       });
       setErrors({});
       toast.success("Product added successfully");
@@ -307,7 +334,10 @@ export default function ProductsTab() {
         stock_group: currentProduct.stock_group,
         uom: currentProduct.unit_of_measure,
         type_of_supply: currentProduct.type_of_supply,
-        stock_quantity: currentProduct.stock_quantity ? parseInt(currentProduct.stock_quantity) : 0
+        stock_quantity: currentProduct.stock_quantity ? parseInt(currentProduct.stock_quantity) : 0,
+        auom: currentProduct.auom || null,
+        uom_qty: currentProduct.uom_qty ? parseFloat(currentProduct.uom_qty) : null,
+        auom_qty: currentProduct.auom_qty ? parseFloat(currentProduct.auom_qty) : null
       };
       console.log('Update payload:', updateData);
       // Debug logging
@@ -597,6 +627,9 @@ export default function ProductsTab() {
         console.log('Units Data:', unitsData);
         setUnits(unitsData);
       }
+
+      // Fetch AUOMs
+      await fetchAUOMs();
     } catch (error) {
       console.error("Error fetching master data:", error);
       toast.error("Failed to fetch master data");
@@ -672,6 +705,32 @@ export default function ProductsTab() {
       toast.success("Stock group created successfully");
     } catch (error) {
       toast.error("Failed to create stock group");
+    }
+  };
+
+  // Add AUOM handling functions
+  const handleCreateAUOM = async (e) => {
+    e.preventDefault();
+    try {
+      await createAUOM(newAUOM);
+      await fetchAUOMs();
+      setShowAUOMModal(false);
+      setNewAUOM("");
+      toast.success("Alternative UOM created successfully");
+    } catch (error) {
+      toast.error("Failed to create Alternative UOM");
+    }
+  };
+
+  const fetchAUOMs = async () => {
+    try {
+      const response = await getAUOMs();
+      if (response.success) {
+        setAUOMs(response.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching AUOMs:", error);
+      toast.error("Failed to fetch Alternative UOMs");
     }
   };
 
@@ -998,6 +1057,81 @@ export default function ProductsTab() {
                     {errors.unit_of_measure && (<p className="mt-1 text-sm text-red-600">{errors.unit_of_measure}</p>)}
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Alternative Unit of Measure
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex-grow">
+                        <select
+                          value={newProduct.auom}
+                          onChange={(e) => setNewProduct({ ...newProduct, auom: e.target.value })}
+                          className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
+                        >
+                          <option value="">Select Alternative UOM</option>
+                          {Array.isArray(auoms) && auoms.length > 0 ? (
+                            auoms.map((auom) => (
+                              <option key={auom.id} value={auom.name}>
+                                {auom.name}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="" disabled>No alternative UOMs available</option>
+                          )}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAUOMModal(true)}
+                        className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"
+                      >
+                        <Plus className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {newProduct.auom && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Base UOM Quantity
+                        </label>
+                        <input
+                          type="number"
+                          value={newProduct.uom_qty}
+                          onChange={(e) => setNewProduct({ ...newProduct, uom_qty: e.target.value })}
+                          placeholder="Enter base UOM quantity"
+                          className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Alternative UOM Quantity
+                        </label>
+                        <input
+                          type="number"
+                          value={newProduct.auom_qty}
+                          onChange={(e) => setNewProduct({ ...newProduct, auom_qty: e.target.value })}
+                          placeholder="Enter alternative UOM quantity"
+                          className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                      {newProduct.uom_qty && newProduct.auom_qty && (
+                        <div className="col-span-2">
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <p className="text-gray-900 text-sm">
+                              Where {formatQuantity(newProduct.uom_qty)} {newProduct.unit_of_measure} = {formatQuantity(newProduct.auom_qty)} {newProduct.auom}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Cost Price</label>
                     <input type="number" value={newProduct.cost_price} onChange={(e) => setNewProduct({ ...newProduct, cost_price: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" min="0" step="0.01" />
                   </div>
@@ -1152,6 +1286,79 @@ export default function ProductsTab() {
                       <button type="button" onClick={() => setShowUOMModal(true)} className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"><Plus className="h-5 w-5" /></button>
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Alternative Unit of Measure
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex-grow">
+                        <select
+                          value={currentProduct.auom}
+                          onChange={(e) => setCurrentProduct({ ...currentProduct, auom: e.target.value })}
+                          className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
+                        >
+                          <option value="">Select Alternative UOM</option>
+                          {Array.isArray(auoms) && auoms.length > 0 ? (
+                            auoms.map((auom) => (
+                              <option key={auom.id} value={auom.name}>
+                                {auom.name}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="" disabled>No alternative UOMs available</option>
+                          )}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAUOMModal(true)}
+                        className="px-2 py-1 bg-[#003366] text-white rounded-lg hover:bg-[#002244] transition-colors"
+                      >
+                        <Plus className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+                  {currentProduct.auom && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Base UOM Quantity
+                        </label>
+                        <input
+                          type="number"
+                          value={currentProduct.uom_qty}
+                          onChange={(e) => setCurrentProduct({ ...currentProduct, uom_qty: e.target.value })}
+                          placeholder="Enter base UOM quantity"
+                          className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Alternative UOM Quantity
+                        </label>
+                        <input
+                          type="number"
+                          value={currentProduct.auom_qty}
+                          onChange={(e) => setCurrentProduct({ ...currentProduct, auom_qty: e.target.value })}
+                          placeholder="Enter alternative UOM quantity"
+                          className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                      {currentProduct.uom_qty && currentProduct.auom_qty && (
+                        <div className="col-span-2">
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <p className="text-gray-900 text-sm">
+                              Where {formatQuantity(currentProduct.uom_qty)} {currentProduct.unit_of_measure} = {formatQuantity(currentProduct.auom_qty)} {currentProduct.auom}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Cost Price</label>
                     <input type="number" value={currentProduct.cost_price} onChange={e => setCurrentProduct({ ...currentProduct, cost_price: e.target.value })} className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors" min="0" step="0.01" />
@@ -1374,11 +1581,11 @@ export default function ProductsTab() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Alias</label>
-                  <p className="text-gray-900">{currentProduct.alias}</p>
+                  <p className="text-gray-900">{currentProduct.alias || '-'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Part Number</label>
-                  <p className="text-gray-900">{currentProduct.part_number}</p>
+                  <p className="text-gray-900">{currentProduct.part_number || '-'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Product Code</label>
@@ -1401,32 +1608,52 @@ export default function ProductsTab() {
                   <p className="text-gray-900">{currentProduct.unit_of_measure}</p>
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Alternative Unit of Measure</label>
+                  <p className="text-gray-900">{currentProduct.auom || '-'}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Base UOM Quantity</label>
+                  <p className="text-gray-900">{formatQuantity(currentProduct.uom_qty)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Alternative UOM Quantity</label>
+                  <p className="text-gray-900">{formatQuantity(currentProduct.auom_qty)}</p>
+                </div>
+                {currentProduct.auom && currentProduct.uom_qty && currentProduct.auom_qty && (
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Conversion Relationship</label>
+                    <p className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                      Where {formatQuantity(currentProduct.uom_qty)} {currentProduct.unit_of_measure} = {formatQuantity(currentProduct.auom_qty)} {currentProduct.auom}
+                    </p>
+                  </div>
+                )}
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Cost Price</label>
-                  <p className="text-gray-900">₹{currentProduct.cost_price}</p>
+                  <p className="text-gray-900">₹{currentProduct.cost_price || '-'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Selling Price</label>
-                  <p className="text-gray-900">₹{currentProduct.selling_price}</p>
+                  <p className="text-gray-900">₹{currentProduct.selling_price || '-'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">MRP</label>
-                  <p className="text-gray-900">₹{currentProduct.mrp}</p>
+                  <p className="text-gray-900">₹{currentProduct.mrp || '-'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">HSN Code</label>
-                  <p className="text-gray-900">{currentProduct.hsn_code}</p>
+                  <p className="text-gray-900">{currentProduct.hsn_code || '-'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">GST %</label>
-                  <p className="text-gray-900">{currentProduct.gst_rate}</p>
+                  <p className="text-gray-900">{currentProduct.gst_rate || '-'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Type of Supply</label>
-                  <p className="text-gray-900">{currentProduct.type_of_supply}</p>
+                  <p className="text-gray-900">{currentProduct.type_of_supply || '-'}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Opening Stock</label>
-                  <p className="text-gray-900">{currentProduct.stock_quantity}</p>
+                  <p className="text-gray-900">{currentProduct.stock_quantity || '-'}</p>
                 </div>
               </div>
               <div className="flex justify-end mt-6">
@@ -1598,6 +1825,47 @@ export default function ProductsTab() {
                     className="px-4 py-2 text-sm font-medium text-white bg-[#003366] hover:bg-[#002244] rounded-lg transition-colors"
                   >
                     Create Stock Group
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Create AUOM Modal */}
+        {showAUOMModal && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+              <h3 className="text-xl font-semibold text-[#003366] mb-4">Add New Alternative UOM</h3>
+              <form onSubmit={handleCreateAUOM} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Alternative UOM Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newAUOM}
+                    onChange={(e) => setNewAUOM(e.target.value)}
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#003366] focus:ring-[#003366] transition-colors"
+                    required
+                  />
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAUOMModal(false);
+                      setNewAUOM("");
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-[#003366] hover:bg-[#002244] rounded-lg transition-colors"
+                  >
+                    Create Alternative UOM
                   </button>
                 </div>
               </form>

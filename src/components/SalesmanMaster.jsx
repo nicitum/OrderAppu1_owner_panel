@@ -587,48 +587,21 @@ export default function SalesmanMaster() {
                 </div>
               </div>
 
-              {/* Route Input with Add Shortcut */}
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Route *</label>
-                <div className="flex gap-2">
-                  <select
-                    name="route"
-                    required
-                    value={newSalesman.route}
-                    onChange={handleInputChange}
-                    className={`flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.route ? "border-red-500" : ""}`}
-                  >
-                    <option value="">Select a route</option>
-                    {routes.map((route) => (
-                      <option key={route.id} value={route.name}>
-                        {route.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddRouteModal(true)}
-                    className="px-2 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </div>
-                {formErrors.route && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.route}</p>
-                )}
-              </div>
-
               {/* Mobile No / Aadhar No - Two Columns */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Mobile No</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mobile No *</label>
                   <input
                     type="tel"
                     name="phone"
+                    required
                     value={newSalesman.phone}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.phone ? "border-red-500" : ""}`}
                   />
+                  {formErrors.phone && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.phone}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Aadhar No</label>
@@ -664,6 +637,37 @@ export default function SalesmanMaster() {
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
                 </div>
+              </div>
+
+              {/* Route Input - Full Width */}
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Route *</label>
+                <div className="flex gap-2">
+                  <select
+                    name="route"
+                    required
+                    value={newSalesman.route}
+                    onChange={handleInputChange}
+                    className={`w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${formErrors.route ? "border-red-500" : ""}`}
+                  >
+                    <option value="">Select a route</option>
+                    {routes.map((route) => (
+                      <option key={route.id} value={route.name}>
+                        {route.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddRouteModal(true)}
+                    className="px-2 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+                {formErrors.route && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.route}</p>
+                )}
               </div>
 
               {/* Notes - Full Width */}
